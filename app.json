@@ -23,7 +23,8 @@
         "NSCameraUsageDescription": "CarDex utilise l'appareil photo pour identifier les voitures que tu scannes.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "usesAppleSignIn": true
     },
     "android": {
       "package": "com.cardex.app",
@@ -54,7 +55,8 @@
         }
       ],
       "expo-web-browser",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true

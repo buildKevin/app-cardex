@@ -1,15 +1,92 @@
+import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 
 import { createId } from '../lib/id';
 import { supabase } from './supabase';
 
 export type Provider = 'apple' | 'google';
 
+export class SignInCancelled extends Error {
+  constructor() {
+    super('cancelled');
+    this.name = 'SignInCancelled';
+  }
+}
+
+/**
+ * Whether the native Apple button can be shown. Apple requires the native flow
+ * rather than a web redirect when the app offers other social logins
+ * (App Store Review Guideline 4.8), so this drives what onboarding renders.
+ */
+export async function isAppleSignInAvailable(): Promise<boolean> {
+  if (Platform.OS !== 'ios') return false;
+  try {
+    return await AppleAuthentication.isAvailableAsync();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Native Sign in with Apple, exchanged for a Supabase session.
+ *
+ * Apple only discloses the name and e-mail on the very first authorisation, so
+ * whatever arrives here is the only chance to capture them.
+ */
+export async function signInWithApple(): Promise<Account> {
+  let credential: AppleAuthentication.AppleAuthenticationCredential;
+  try {
+    credential = await AppleAuthentication.signInAsync({
+      requestedScopes: [
+        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        AppleAuthentication.AppleAuthenticationScope.EMAIL,
+      ],
+    });
+  } catch (error: any) {
+    if (error?.code === 'ERR_REQUEST_CANCELED') throw new SignInCancelled();
+    throw new Error("Connexion Apple impossible");
+  }
+
+  if (!credential.identityToken) throw new Error('Réponse Apple incomplète');
+
+  const suggestedName = [credential.fullName?.givenName, credential.fullName?.familyName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  // No Supabase project: keep the Apple identity locally so the profile is
+  // still truthful about how the account was created.
+  if (!supabase) {
+    return {
+      id: credential.user ?? createId(),
+      email: credential.email ?? null,
+      provider: 'apple',
+      suggestedName: suggestedName || undefined,
+    };
+  }
+
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: 'apple',
+    token: credential.identityToken,
+  });
+  if (error || !data.user) throw new Error(error?.message ?? 'Session Apple refusée');
+
+  return {
+    id: data.user.id,
+    email: data.user.email ?? credential.email ?? null,
+    provider: 'apple',
+    suggestedName: suggestedName || undefined,
+  };
+}
+
 export interface Account {
   id: string;
   email: string | null;
   provider: Provider | 'local';
+  /** Apple hands over the real name once, on first authorisation only. */
+  suggestedName?: string;
 }
 
 /**

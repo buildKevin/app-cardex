@@ -42,6 +42,10 @@ interface GameState {
   removeEntry: (entryId: string) => void;
   /** Drops the session and returns to onboarding, keeping the local garage. */
   signOutLocal: () => void;
+  /** Records that an entry now exists server-side. */
+  markSynced: (entryId: string, remoteId: string, photoPath: string | null) => void;
+  /** Adds server rows we do not have locally, newest first. */
+  mergeRemote: (entries: GarageEntry[]) => void;
   /** Empties the garage and the scan counter, keeping the account. */
   resetGarage: () => void;
   reset: () => void;
@@ -115,6 +119,28 @@ export const useGameStore = create<GameState>()(
           garage: state.garage.filter((entry) => entry.id !== entryId),
           showcase: state.showcase.filter((id) => id !== entryId),
         })),
+
+      markSynced: (entryId, remoteId, photoPath) =>
+        set((state) => ({
+          garage: state.garage.map((entry) =>
+            entry.id === entryId ? { ...entry, remoteId, photoPath } : entry,
+          ),
+        })),
+
+      mergeRemote: (entries) =>
+        set((state) => {
+          // Match on remoteId so a row we pushed ourselves is never duplicated.
+          const known = new Set(
+            state.garage.map((entry) => entry.remoteId).filter(Boolean) as string[],
+          );
+          const incoming = entries.filter((entry) => entry.remoteId && !known.has(entry.remoteId));
+          if (incoming.length === 0) return state;
+
+          const merged = [...state.garage, ...incoming].sort(
+            (a, b) => Date.parse(b.discoveredAt) - Date.parse(a.discoveredAt),
+          );
+          return { garage: merged };
+        }),
 
       resetGarage: () => set({ garage: [], showcase: [], scanCount: 0 }),
 

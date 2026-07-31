@@ -1,10 +1,11 @@
 import { CARS } from '../data/cars';
 import { BRANDS_BY_ID } from '../data/brands';
 import type { Rarity, VisionResult } from '../data/types';
+import { isReleaseMisconfigured } from '../config/release';
 import { ENV, hasOpenAI, hasSupabase } from './env';
 import { supabase } from './supabase';
 
-export type VisionErrorCode = 'no_car' | 'network' | 'unreadable' | 'limit';
+export type VisionErrorCode = 'no_car' | 'network' | 'unreadable' | 'limit' | 'unconfigured';
 
 export class VisionError extends Error {
   constructor(
@@ -162,5 +163,11 @@ export const visionMode: 'supabase' | 'openai' | 'mock' = hasSupabase
 export async function identifyCar(base64: string): Promise<VisionResult> {
   if (visionMode === 'supabase') return identifyViaSupabase(base64);
   if (visionMode === 'openai') return identifyViaOpenAI(base64);
+
+  // Demo mode must never reach a real user: inventing a car from the catalogue
+  // and presenting it as an identification is a lie, and one nobody would spot
+  // until review. Fail loudly instead.
+  if (isReleaseMisconfigured(visionMode)) throw new VisionError('unconfigured');
+
   return identifyMocked();
 }

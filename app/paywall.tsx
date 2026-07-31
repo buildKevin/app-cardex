@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics';
+import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
@@ -8,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../src/components/Button';
 import { Icon } from '../src/components/Icon';
 import { Text } from '../src/components/Text';
+import { LEGAL, hasLegalLinks } from '../src/config/release';
 import { events, track } from '../src/services/analytics';
 import {
   FOUNDER_FALLBACK_PRICE,
@@ -149,6 +151,26 @@ export default function Paywall() {
           </Text>
         </Pressable>
 
+        {/* Apple requires the terms and privacy policy to be reachable from any
+            screen that sells something. */}
+        {hasLegalLinks ? (
+          <View style={styles.legal}>
+            <Pressable onPress={() => WebBrowser.openBrowserAsync(LEGAL.terms)} hitSlop={8}>
+              <Text variant="caption" tone="tertiary">
+                Conditions
+              </Text>
+            </Pressable>
+            <Text variant="caption" tone="tertiary">
+              ·
+            </Text>
+            <Pressable onPress={() => WebBrowser.openBrowserAsync(LEGAL.privacy)} hitSlop={8}>
+              <Text variant="caption" tone="tertiary">
+                Confidentialité
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {__DEV__ && !isPurchasesAvailable() ? (
           <Pressable onPress={demoUnlock} hitSlop={8}>
             <Text variant="caption" tone="tertiary" center>
@@ -206,6 +228,12 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   footer: {
+    gap: spacing.sm,
+  },
+  legal: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     gap: spacing.sm,
   },
 });

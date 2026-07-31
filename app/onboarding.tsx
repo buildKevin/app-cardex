@@ -1,3 +1,4 @@
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -16,7 +17,16 @@ import { Button } from '../src/components/Button';
 import { CarSilhouette } from '../src/components/CarSilhouette';
 import { Text } from '../src/components/Text';
 import { events, identify, track } from '../src/services/analytics';
-import { signIn, type Provider } from '../src/services/auth';
+import {
+  SignInCancelled,
+  isAppleSignInAvailable,
+  signIn,
+  signInWithApple,
+  type Account,
+  type Provider,
+} from '../src/services/auth';
+import { createId } from '../src/lib/id';
+import { restoreGarage } from '../src/services/restoreGarage';
 import { useGameStore } from '../src/store/useGameStore';
 import { colors, gutter, motion, radii, spacing } from '../src/theme';
 
@@ -51,13 +61,16 @@ export default function Onboarding() {
   const insets = useSafeAreaInsets();
   const listRef = useRef<FlatList<Slide>>(null);
   const [page, setPage] = useState(0);
-  const [pending, setPending] = useState<Provider | null>(null);
+  const [pending, setPending] = useState<Provider | 'skip' | null>(null);
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
   const completeOnboarding = useGameStore((state) => state.completeOnboarding);
   const setAccount = useGameStore((state) => state.setAccount);
+  const setUsername = useGameStore((state) => state.setUsername);
 
   useEffect(() => {
     track(events.onboardingStarted);
+    isAppleSignInAvailable().then(setAppleAvailable);
   }, []);
 
   const isLast = page === SLIDES.length - 1;
@@ -71,22 +84,44 @@ export default function Onboarding() {
     if (next !== page) setPage(next);
   };
 
-  const onSignIn = async (provider: Provider) => {
-    setPending(provider);
+  const finish = (account: Account) => {
+    setAccount(account.id, account.email, account.provider);
+    if (account.suggestedName) setUsername(account.suggestedName);
+    identify(account.id, { provider: account.provider });
+    track(events.signedIn, { provider: account.provider });
+    completeOnboarding();
+    track(events.onboardingCompleted);
+
+    // Not awaited: a returning player should reach the app immediately, and the
+    // garage fills in behind them. Local accounts have nothing to reconcile.
+    if (account.provider !== 'local') {
+      restoreGarage(account.id).catch(() => {});
+    }
+
+    router.replace('/paywall?context=onboarding');
+  };
+
+  const run = async (key: Provider | 'skip', task: () => Promise<Account>) => {
+    setPending(key);
     try {
-      const account = await signIn(provider);
-      setAccount(account.id, account.email, account.provider);
-      identify(account.id, { provider: account.provider });
-      track(events.signedIn, { provider: account.provider });
-      completeOnboarding();
-      track(events.onboardingCompleted);
-      router.replace('/paywall?context=onboarding');
+      finish(await task());
     } catch (error: any) {
-      Alert.alert('Connexion impossible', error?.message ?? 'Réessaie dans un instant.');
+      // Backing out of the Apple sheet is not a failure worth an alert.
+      if (!(error instanceof SignInCancelled)) {
+        Alert.alert('Connexion impossible', error?.message ?? 'Réessaie dans un instant.');
+      }
     } finally {
       setPending(null);
     }
   };
+
+  /**
+   * The whole game works on-device, so requiring an account would fall foul of
+   * App Store Review Guideline 5.1.1(i). Skipping creates a local-only account
+   * that can be upgraded later from the profile.
+   */
+  const onSkip = () =>
+    run('skip', async () => ({ id: createId(), email: null, provider: 'local' }));
 
   return (
     <View style={styles.root}>
@@ -127,17 +162,32 @@ export default function Onboarding() {
 
         {isLast ? (
           <Animated.View entering={FadeInDown.duration(motion.base)} style={styles.auth}>
-            <Button
-              label="Continuer avec Apple"
-              onPress={() => onSignIn('apple')}
-              loading={pending === 'apple'}
-              disabled={pending !== null}
-            />
+            {/* Apple's own button: its wording, logo and proportions are part of
+                what the review checks, so it is not restyled. */}
+            {appleAvailable ? (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                cornerRadius={radii.md}
+                style={styles.appleButton}
+                onPress={() => run('apple', signInWithApple)}
+              />
+            ) : null}
+
             <Button
               label="Continuer avec Google"
-              variant="secondary"
-              onPress={() => onSignIn('google')}
+              variant={appleAvailable ? 'secondary' : 'primary'}
+              onPress={() => run('google', () => signIn('google'))}
               loading={pending === 'google'}
+              disabled={pending !== null}
+            />
+
+            <Button
+              label="Continuer sans compte"
+              variant="ghost"
+              size="md"
+              onPress={onSkip}
+              loading={pending === 'skip'}
               disabled={pending !== null}
             />
           </Animated.View>
@@ -192,5 +242,9 @@ const styles = StyleSheet.create({
   },
   auth: {
     gap: spacing.md,
+  },
+  appleButton: {
+    height: 54,
+    width: '100%',
   },
 });

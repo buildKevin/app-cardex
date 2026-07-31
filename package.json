@@ -7,6 +7,7 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.111.0",
     "expo": "~57.0.9",
+    "expo-apple-authentication": "~57.0.1",
     "expo-application": "~57.0.2",
     "expo-blur": "~57.0.2",
     "expo-camera": "~57.0.3",
@@ -49,7 +50,8 @@
     "web": "expo start --web",
     "lint": "tsc --noEmit",
     "verify:matchers": "node scripts/verify-matchers.mjs",
-    "seed": "node scripts/generate-seed.mjs"
+    "seed": "node scripts/generate-seed.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "private": true
 }

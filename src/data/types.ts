@@ -41,6 +41,10 @@ export interface GarageEntry {
   discoveredAt: string;
   xp: number;
   confidence: number;
+  /** Row id in Supabase once pushed. null/undefined = not synced yet. */
+  remoteId?: string | null;
+  /** Path inside the `scans` bucket, when the photo was uploaded. */
+  photoPath?: string | null;
 }
 
 /** What the vision model is allowed to return — nothing more. */

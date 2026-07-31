@@ -15,6 +15,7 @@ import { formatDiscoveredAt, formatPower, formatPrice, formatYears } from '../..
 import { RARITY_LABEL } from '../../src/lib/rarity';
 import { events, track } from '../../src/services/analytics';
 import { deletePhoto } from '../../src/services/photo';
+import { deleteRemoteEntry } from '../../src/services/sync';
 import { SHOWCASE_SIZE, useEntryCar, useGameStore } from '../../src/store/useGameStore';
 import { colors, gutter, radii, spacing } from '../../src/theme';
 
@@ -61,6 +62,7 @@ export default function CarDetail() {
         style: 'destructive',
         onPress: () => {
           deletePhoto(entry.photoUri);
+          if (entry.remoteId) deleteRemoteEntry(entry.remoteId).catch(() => {});
           removeEntry(entry.id);
           router.back();
         },

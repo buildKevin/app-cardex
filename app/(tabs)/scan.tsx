@@ -18,6 +18,7 @@ import { Text } from '../../src/components/Text';
 import { events, track } from '../../src/services/analytics';
 import { preparePhoto } from '../../src/services/photo';
 import { VisionError, identifyCar, visionMode } from '../../src/services/vision';
+import { pushEntry } from '../../src/services/sync';
 import { useGameStore, useScansLeft } from '../../src/store/useGameStore';
 import { colors, gutter, motion, radii, spacing } from '../../src/theme';
 
@@ -28,6 +29,7 @@ const ERROR_COPY: Record<string, string> = {
   network: 'Connexion impossible. Vérifie ton réseau.',
   unreadable: "Réponse illisible de l'IA. Réessaie.",
   limit: 'Tes scans gratuits sont épuisés.',
+  unconfigured: "L'identification n'est pas configurée sur cette version.",
 };
 
 export default function Scan() {
@@ -43,6 +45,8 @@ export default function Scan() {
   const consumeScan = useGameStore((state) => state.consumeScan);
   const addScan = useGameStore((state) => state.addScan);
   const isFounder = useGameStore((state) => state.isFounder);
+  const accountId = useGameStore((state) => state.profile.accountId);
+  const markSynced = useGameStore((state) => state.markSynced);
   const left = useScansLeft();
 
   // Keep the camera mounted only while the tab is on screen.
@@ -115,6 +119,14 @@ export default function Scan() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setPhase('idle');
       router.push(`/reveal?entryId=${entry.id}`);
+
+      // Deliberately not awaited: the reveal must not wait on a network round
+      // trip, and an unsynced entry is picked up on the next sign-in.
+      if (accountId) {
+        pushEntry(accountId, entry).then((result) => {
+          if (result) markSynced(entry.id, result.remoteId, result.photoPath);
+        });
+      }
     } catch (caught) {
       const code = caught instanceof VisionError ? caught.code : 'unreadable';
 

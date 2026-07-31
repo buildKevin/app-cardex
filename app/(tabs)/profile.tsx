@@ -1,5 +1,6 @@
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
+import * as WebBrowser from 'expo-web-browser';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -18,6 +19,7 @@ import { SettingsRow } from '../../src/components/SettingsRow';
 import { Text } from '../../src/components/Text';
 import { badgeStates, unlockedBadgeCount } from '../../src/data/badges';
 import { formatNumber } from '../../src/lib/format';
+import { LEGAL, hasLegalLinks } from '../../src/config/release';
 import { events, resetAnalytics, track } from '../../src/services/analytics';
 import { deleteAccount, signOut } from '../../src/services/auth';
 import { hasSupabase } from '../../src/services/env';
@@ -333,6 +335,27 @@ export default function Profile() {
           last
         />
       </SettingsGroup>
+
+      {hasLegalLinks ? (
+        <SettingsGroup title="À propos">
+          <SettingsRow
+            label="Conditions d’utilisation"
+            onPress={() => WebBrowser.openBrowserAsync(LEGAL.terms)}
+          />
+          <SettingsRow
+            label="Politique de confidentialité"
+            onPress={() => WebBrowser.openBrowserAsync(LEGAL.privacy)}
+            last={!LEGAL.support}
+          />
+          {LEGAL.support ? (
+            <SettingsRow
+              label="Aide et contact"
+              onPress={() => WebBrowser.openBrowserAsync(LEGAL.support)}
+              last
+            />
+          ) : null}
+        </SettingsGroup>
+      ) : null}
 
       <View style={styles.footer}>
         <Text variant="caption" tone="tertiary">
