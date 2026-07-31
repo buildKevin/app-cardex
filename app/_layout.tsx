@@ -99,6 +99,7 @@ export default function RootLayout() {
           <Stack.Screen name="car/[entryId]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="collection/[brandId]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="showcase" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="badges" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

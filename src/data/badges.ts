@@ -72,6 +72,17 @@ export function badgeStates(stats: Stats): BadgeState[] {
   });
 }
 
+/**
+ * Earned first, then closest to being earned. One badge per brand means the
+ * tail is always a wall of untouched 0 / 5, which is the least useful thing to
+ * show — especially in the profile, where only the first few are visible.
+ */
+export function rankBadges(badges: BadgeState[]): BadgeState[] {
+  return [...badges].sort(
+    (a, b) => Number(b.unlocked) - Number(a.unlocked) || b.ratio - a.ratio,
+  );
+}
+
 export function unlockedBadgeCount(stats: Stats): number {
   return badgeStates(stats).filter((badge) => badge.unlocked).length;
 }

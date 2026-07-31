@@ -17,7 +17,7 @@ import { SectionHeader } from '../../src/components/SectionHeader';
 import { SettingsGroup } from '../../src/components/SettingsGroup';
 import { SettingsRow } from '../../src/components/SettingsRow';
 import { Text } from '../../src/components/Text';
-import { badgeStates, unlockedBadgeCount } from '../../src/data/badges';
+import { badgeStates, rankBadges, unlockedBadgeCount } from '../../src/data/badges';
 import { formatDiscoveredAt, formatNumber } from '../../src/lib/format';
 import { LEGAL, hasLegalLinks } from '../../src/config/release';
 import { events, resetAnalytics, track } from '../../src/services/analytics';
@@ -38,6 +38,9 @@ import { SHOWCASE_SIZE, useGameStore, useStats } from '../../src/store/useGameSt
 import { colors, fonts, gridItemWidth, gutter, radii, spacing, type } from '../../src/theme';
 
 type Busy = 'restore' | 'manage' | 'signout' | 'delete' | null;
+
+/** One badge per brand: the full grid is far longer than the rest of the page. */
+const BADGE_PREVIEW = 4;
 
 const PLAN_LABEL: Record<string, string> = {
   lifetime: 'À vie',
@@ -89,6 +92,7 @@ export default function Profile() {
 
   const badges = badgeStates(stats);
   const unlocked = unlockedBadgeCount(stats);
+  const previewBadges = rankBadges(badges).slice(0, BADGE_PREVIEW);
   const showcaseEntries = showcase
     .map((id) => garage.find((entry) => entry.id === id))
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
@@ -333,12 +337,25 @@ export default function Profile() {
       <View style={styles.section}>
         <SectionHeader title="Badges" trailing={`${unlocked} / ${badges.length}`} />
         <View style={styles.badges}>
-          {badges.map((badge) => (
+          {previewBadges.map((badge) => (
             <View key={badge.def.id} style={styles.badgeCell}>
               <BadgeTile badge={badge} />
             </View>
           ))}
         </View>
+
+        {badges.length > BADGE_PREVIEW ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/badges')}
+            style={styles.badgeToggle}
+          >
+            <Text variant="label" tone="secondary">
+              Tout afficher ({badges.length})
+            </Text>
+            <Icon name="chevron" size={14} color={colors.textTertiary} />
+          </Pressable>
+        ) : null}
       </View>
 
       <SettingsGroup title="Compte">
@@ -576,6 +593,18 @@ const styles = StyleSheet.create({
   },
   badgeCell: {
     width: gridItemWidth(2),
+  },
+  badgeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 44,
+    marginTop: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   footer: {
     marginTop: spacing.xxl,
