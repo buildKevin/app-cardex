@@ -50,4 +50,12 @@ export interface VisionResult {
   generation: string | null;
   year: number | null;
   confidence: number;
+  /**
+   * Catalogue id as decided by the server, when a server was involved.
+   *
+   * `undefined` means nobody authoritative has ruled (demo mode, or the direct
+   * OpenAI dev path) and the client should match locally. `null` means the
+   * server looked and found nothing — which is a verdict, not an absence.
+   */
+  serverCarId?: string | null;
 }

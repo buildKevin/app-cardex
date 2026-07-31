@@ -47,6 +47,8 @@ function parseResult(raw: unknown): VisionResult {
     generation: typeof data.generation === 'string' && data.generation.trim() ? data.generation.trim() : null,
     year: Number.isFinite(year) && year > 1900 && year < 2100 ? Math.round(year) : null,
     confidence: Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : 0.6,
+    // Present only when the edge function ruled on it.
+    serverCarId: 'car_id' in data ? ((data.car_id as string | null) ?? null) : undefined,
   };
 }
 

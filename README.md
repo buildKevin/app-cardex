@@ -132,6 +132,21 @@ l'alias le plus long qui correspond, pour que « golf gti » gagne sur « golf �
 Une voiture non catalogée rejoint quand même le garage — elle ne compte
 simplement dans aucune collection.
 
+La règle existe deux fois : en TypeScript pour le mode démo, et en SQL
+(`match_car_id()`) comme autorité pour le compteur de scans, parce que le
+serveur ne peut pas croire un client sur parole quand celui-ci prétend avoir
+raté. En ligne le client suit le verdict du serveur, donc une divergence ne peut
+plus facturer personne à tort. Pour vérifier que les deux restent d'accord :
+
+```bash
+npm run verify:matchers
+```
+
+Il monte un Postgres jetable, applique le schéma et le seed, et compare les deux
+implémentations sur chaque voiture, chaque alias, et chaque paire de marques dont
+les alias se recouvrent. Sortie non nulle en cas de divergence — à mettre en CI.
+Nécessite Docker.
+
 ### Économie du jeu
 
 | Rareté | XP |

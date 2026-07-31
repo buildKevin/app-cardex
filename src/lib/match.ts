@@ -1,5 +1,5 @@
-import { BRANDS } from '../data/brands';
-import { CARS } from '../data/cars';
+import { BRANDS, BRANDS_BY_ID } from '../data/brands';
+import { CARS, CARS_BY_ID } from '../data/cars';
 import type { Brand, Car, VisionResult } from '../data/types';
 
 /** Lowercase, strip accents, collapse everything that isn't a letter or digit. */
@@ -84,8 +84,24 @@ function matchCar(brand: Brand, model: string): Car | undefined {
 /**
  * Turn the raw vision output into catalogue data. Both fields are optional:
  * an unknown make still lands in the garage, it just won't fill a collection.
+ *
+ * When the server already ruled (`serverCarId`), that verdict wins. The server
+ * owns the scan counter, so letting the client reach its own conclusion is how
+ * a player ends up charged for a scan the app then shows as unmatched. Local
+ * matching stays for demo mode and the direct-OpenAI dev path, where there is
+ * no server and no accounting.
  */
 export function resolveScan(result: VisionResult): ResolvedScan {
+  if (result.serverCarId !== undefined) {
+    const car = result.serverCarId ? CARS_BY_ID[result.serverCarId] : undefined;
+    if (car) return { brand: BRANDS_BY_ID[car.brandId], car };
+
+    // The server said "no match", or named a car this app build does not know
+    // (catalogue newer than the bundle). Either way we must not invent a match,
+    // but we can still name the brand for display.
+    return { brand: matchBrand(result.make) };
+  }
+
   const brand = matchBrand(result.make);
   if (!brand) return {};
   return { brand, car: matchCar(brand, result.model) };

@@ -1,10 +1,10 @@
 import { useRouter } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Button } from '../../src/components/Button';
 import { CarTile } from '../../src/components/CarTile';
-import { CollectionMatrix } from '../../src/components/CollectionMatrix';
+import { BrandProgressDots } from '../../src/components/BrandProgressDots';
 import { EmptyState } from '../../src/components/EmptyState';
 import { FeaturedCar } from '../../src/components/FeaturedCar';
 import { Glow } from '../../src/components/Glow';
@@ -13,6 +13,7 @@ import { RarityBreakdown } from '../../src/components/RarityBreakdown';
 import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { Text } from '../../src/components/Text';
+import { BRANDS } from '../../src/data/brands';
 import { CARS } from '../../src/data/cars';
 import { formatNumber } from '../../src/lib/format';
 import { rarityColor } from '../../src/lib/rarity';
@@ -31,6 +32,7 @@ export default function Garage() {
   const ownedCarIds = new Set(
     garage.map((entry) => entry.carId).filter((id): id is string => Boolean(id)),
   );
+  const started = Object.values(stats.brands).filter((brand) => brand.owned > 0).length;
 
   return (
     <Screen scroll>
@@ -91,13 +93,15 @@ export default function Garage() {
         style={styles.cta}
       />
 
-      <View style={styles.section}>
+      <Pressable style={styles.section} onPress={() => router.push('/(tabs)/collections')}>
         <SectionHeader title="Progression" trailing={`${ownedCarIds.size} / ${CARS.length}`} />
-        <CollectionMatrix ownedCarIds={ownedCarIds} />
-        <Text variant="caption" tone="tertiary" style={styles.matrixHint}>
-          Une colonne par marque, cinq voitures à trouver dans chacune.
+        <BrandProgressDots brands={stats.brands} />
+        <Text variant="caption" tone="tertiary" style={styles.progressionHint}>
+          {started === 0
+            ? `${BRANDS.length} marques à découvrir`
+            : `${started} marque${started > 1 ? 's' : ''} commencée${started > 1 ? 's' : ''} · ${stats.completedBrands} complète${stats.completedBrands > 1 ? 's' : ''}`}
         </Text>
-      </View>
+      </Pressable>
 
       <View style={styles.section}>
         {hasCars ? (
@@ -165,7 +169,7 @@ const styles = StyleSheet.create({
   section: {
     marginTop: spacing.xxl,
   },
-  matrixHint: {
+  progressionHint: {
     marginTop: spacing.md,
   },
   grid: {
