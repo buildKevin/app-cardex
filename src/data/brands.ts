@@ -18,6 +18,24 @@ export const BRANDS: Brand[] = [
   { id: 'toyota', name: 'Toyota', country: 'Japon', aliases: ['toyota'] },
   { id: 'renault', name: 'Renault', country: 'France', aliases: ['renault'] },
   { id: 'peugeot', name: 'Peugeot', country: 'France', aliases: ['peugeot'] },
+  { id: 'citroen', name: 'Citroën', country: 'France', aliases: ['citroen', 'citroën', 'ds'] },
+  { id: 'dacia', name: 'Dacia', country: 'Roumanie', aliases: ['dacia'] },
+  { id: 'fiat', name: 'Fiat', country: 'Italie', aliases: ['fiat', 'abarth'] },
+  { id: 'alfa-romeo', name: 'Alfa Romeo', country: 'Italie', aliases: ['alfa romeo', 'alfa', 'alfaromeo'] },
+  { id: 'maserati', name: 'Maserati', country: 'Italie', aliases: ['maserati'] },
+  { id: 'mini', name: 'Mini', country: 'Royaume-Uni', aliases: ['mini', 'mini cooper'] },
+  {
+    id: 'land-rover',
+    name: 'Land Rover',
+    country: 'Royaume-Uni',
+    aliases: ['land rover', 'landrover', 'range rover', 'rangerover'],
+  },
+  { id: 'aston-martin', name: 'Aston Martin', country: 'Royaume-Uni', aliases: ['aston martin', 'aston'] },
+  { id: 'mclaren', name: 'McLaren', country: 'Royaume-Uni', aliases: ['mclaren', 'mc laren'] },
+  { id: 'volvo', name: 'Volvo', country: 'Suède', aliases: ['volvo'] },
+  { id: 'nissan', name: 'Nissan', country: 'Japon', aliases: ['nissan', 'datsun'] },
+  { id: 'hyundai', name: 'Hyundai', country: 'Corée du Sud', aliases: ['hyundai'] },
+  { id: 'kia', name: 'Kia', country: 'Corée du Sud', aliases: ['kia'] },
 ];
 
 export const BRANDS_BY_ID: Record<string, Brand> = Object.fromEntries(
