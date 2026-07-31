@@ -2,9 +2,18 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { Image } from 'expo-image';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import {
+  Alert,
+  type AlertButton,
+  Linking,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { BadgeTile } from '../../src/components/BadgeTile';
@@ -24,7 +33,7 @@ import { LEGAL, hasLegalLinks } from '../../src/config/release';
 import { events, resetAnalytics, track } from '../../src/services/analytics';
 import { deleteAccount, signOut } from '../../src/services/auth';
 import { hasSupabase } from '../../src/services/env';
-import { deletePhoto } from '../../src/services/photo';
+import { deletePhoto, prepareAvatar } from '../../src/services/photo';
 import {
   getCustomerInfo,
   getProPlans,
@@ -72,6 +81,7 @@ export default function Profile() {
 
   const profile = useGameStore((state) => state.profile);
   const setUsername = useGameStore((state) => state.setUsername);
+  const setAvatar = useGameStore((state) => state.setAvatar);
   const isPro = useGameStore((state) => state.isPro);
   const setPro = useGameStore((state) => state.setPro);
   const showcase = useGameStore((state) => state.showcase);
@@ -82,6 +92,7 @@ export default function Profile() {
 
   const [draftName, setDraftName] = useState(profile.username);
   const [busy, setBusy] = useState<Busy>(null);
+  const [savingAvatar, setSavingAvatar] = useState(false);
   const [pro, setProStatus] = useState<ProStatus | null>(null);
   const [price, setPrice] = useState<string | null>(null);
 
@@ -127,6 +138,76 @@ export default function Profile() {
 
   /** Photos live on disk, outside the store, so they need removing by hand. */
   const purgePhotos = () => garage.forEach((entry) => deletePhoto(entry.photoUri));
+
+  /**
+   * The picker returns a cache uri, so the pick only counts once `prepareAvatar`
+   * has a copy in the documents directory. The previous file goes at the same
+   * moment, or every change would leave one behind forever.
+   */
+  const pickAvatar = async (source: 'library' | 'camera') => {
+    if (source === 'camera') {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Appareil photo bloqué',
+          'Autorise CarDex à utiliser l’appareil photo dans les réglages de ton téléphone.',
+          [
+            { text: 'Annuler', style: 'cancel' },
+            { text: 'Ouvrir les réglages', onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+    }
+
+    const options: ImagePicker.ImagePickerOptions = {
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    };
+
+    const result =
+      source === 'camera'
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
+
+    const asset = result.canceled ? undefined : result.assets[0];
+    if (!asset) return;
+
+    setSavingAvatar(true);
+    const previous = profile.avatarUri;
+    const uri = await prepareAvatar(asset.uri);
+    setSavingAvatar(false);
+
+    if (!uri) {
+      Alert.alert('Photo non enregistrée', 'Réessaie dans un instant.');
+      return;
+    }
+
+    setAvatar(uri);
+    deletePhoto(previous);
+  };
+
+  const removeAvatar = () => {
+    const previous = profile.avatarUri;
+    setAvatar(null);
+    deletePhoto(previous);
+  };
+
+  const onChangeAvatar = () => {
+    const buttons: AlertButton[] = [
+      { text: 'Choisir dans mes photos', onPress: () => pickAvatar('library') },
+      { text: 'Prendre une photo', onPress: () => pickAvatar('camera') },
+    ];
+
+    if (profile.avatarUri) {
+      buttons.push({ text: 'Retirer la photo', style: 'destructive', onPress: removeAvatar });
+    }
+    buttons.push({ text: 'Annuler', style: 'cancel' });
+
+    Alert.alert('Photo de profil', undefined, buttons);
+  };
 
   const onRestore = async () => {
     setBusy('restore');
@@ -255,6 +336,7 @@ export default function Profile() {
 
           track(events.accountDeleted, { remote: outcome === 'deleted' });
           purgePhotos();
+          deletePhoto(profile.avatarUri);
           resetAnalytics();
           reset();
           router.replace('/onboarding');
@@ -269,7 +351,18 @@ export default function Profile() {
 
       <Card style={styles.identity}>
         <View style={styles.identityRow}>
-          <Avatar name={profile.username} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Changer ma photo de profil"
+            onPress={onChangeAvatar}
+            disabled={savingAvatar}
+            style={({ pressed }) => [styles.avatar, pressed && styles.avatarPressed]}
+          >
+            <Avatar name={profile.username} uri={profile.avatarUri} />
+            <View style={styles.avatarBadge}>
+              <Icon name="camera" size={13} color={colors.text} />
+            </View>
+          </Pressable>
           <View style={styles.identityText}>
             <TextInput
               value={draftName}
@@ -567,6 +660,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.lg,
+  },
+  avatar: {
+    // The badge hangs off the circle, so no clipping here.
+    position: 'relative',
+  },
+  avatarPressed: {
+    opacity: 0.7,
+  },
+  avatarBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
   },
   identityText: {
     flex: 1,

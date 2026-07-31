@@ -1,24 +1,29 @@
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
+import { BrandStrip } from '../../src/components/BrandStrip';
 import { Button } from '../../src/components/Button';
+import { Card } from '../../src/components/Card';
 import { CarTile } from '../../src/components/CarTile';
-import { BrandProgressDots } from '../../src/components/BrandProgressDots';
-import { EmptyState } from '../../src/components/EmptyState';
-import { FeaturedCar } from '../../src/components/FeaturedCar';
-import { Glow } from '../../src/components/Glow';
+import { GarageHero } from '../../src/components/GarageHero';
+import { Icon } from '../../src/components/Icon';
 import { ProgressBar } from '../../src/components/ProgressBar';
+import { RarityBar } from '../../src/components/RarityBar';
 import { RarityBreakdown } from '../../src/components/RarityBreakdown';
 import { Screen } from '../../src/components/Screen';
+import { Scrim } from '../../src/components/Scrim';
 import { SectionHeader } from '../../src/components/SectionHeader';
+import { StatBlock } from '../../src/components/StatBlock';
 import { Text } from '../../src/components/Text';
 import { BRANDS } from '../../src/data/brands';
 import { CARS } from '../../src/data/cars';
 import { formatNumber } from '../../src/lib/format';
-import { rarityColor } from '../../src/lib/rarity';
 import { useGameStore, useStats } from '../../src/store/useGameStore';
-import { gridItemWidth, gutter, motion, spacing } from '../../src/theme';
+import { colors, gridItemWidth, gutter, motion, spacing } from '../../src/theme';
+
+/** Room under the scroll for the docked call to action. */
+const DOCK_HEIGHT = 132;
 
 export default function Garage() {
   const router = useRouter();
@@ -27,150 +32,150 @@ export default function Garage() {
 
   const { level, xpToNext, ratio } = stats.progress;
   const hasCars = stats.cars > 0;
-  const featured = garage[0];
+  const featured = garage[0] ?? null;
 
   const ownedCarIds = new Set(
     garage.map((entry) => entry.carId).filter((id): id is string => Boolean(id)),
   );
-  const started = Object.values(stats.brands).filter((brand) => brand.owned > 0).length;
 
   return (
-    <Screen scroll>
-      {/* Soft halo in the rarity of the latest find — the only depth cue. */}
-      {featured ? (
-        <View style={styles.glow} pointerEvents="none">
-          <Glow color={rarityColor(featured.rarity)} width={420} intensity={0.2} />
-        </View>
-      ) : null}
+    <View style={styles.root}>
+      <Screen scroll bleed edgeToEdgeTop contentStyle={styles.content}>
+        <GarageHero
+          entry={featured}
+          level={level}
+          onPress={featured ? () => router.push(`/car/${featured.id}`) : undefined}
+        />
 
-      <Text variant="overline" tone="tertiary" uppercase>
-        Garage
-      </Text>
-
-      <View style={styles.headline}>
-        <View style={styles.count}>
-          <Text variant="hero">{formatNumber(stats.cars)}</Text>
-          <Text variant="body" tone="secondary">
-            {stats.cars === 1 ? 'voiture collectionnée' : 'voitures collectionnées'}
-          </Text>
-        </View>
-
-        <View style={styles.levelBlock}>
-          <Text variant="bodyMedium">Niveau {level}</Text>
-          <Text variant="caption" tone="tertiary">
-            {formatNumber(stats.xp)} XP
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.progress}>
-        <ProgressBar ratio={ratio} height={2} />
-        <Text variant="caption" tone="tertiary">
-          {xpToNext > 0
-            ? `${formatNumber(xpToNext)} XP avant le niveau ${level + 1}`
-            : 'Niveau maximum atteint'}
-        </Text>
-      </View>
-
-      {hasCars ? (
-        <>
-          <View style={styles.rarity}>
-            <RarityBreakdown counts={stats.rarityCounts} />
-          </View>
-
-          <View style={styles.featured}>
-            <SectionHeader title="Dernière découverte" />
-            <FeaturedCar entry={featured} onPress={() => router.push(`/car/${featured.id}`)} />
-          </View>
-        </>
-      ) : null}
-
-      {/* No scan counter on purpose — a countdown reads as a warning. */}
-      <Button
-        label="Scanner une voiture"
-        size="xl"
-        onPress={() => router.push('/(tabs)/scan')}
-        style={styles.cta}
-      />
-
-      <Pressable style={styles.section} onPress={() => router.push('/(tabs)/collections')}>
-        <SectionHeader title="Progression" trailing={`${ownedCarIds.size} / ${CARS.length}`} />
-        <BrandProgressDots brands={stats.brands} />
-        <Text variant="caption" tone="tertiary" style={styles.progressionHint}>
-          {started === 0
-            ? `${BRANDS.length} marques à découvrir`
-            : `${started} marque${started > 1 ? 's' : ''} commencée${started > 1 ? 's' : ''} · ${stats.completedBrands} complète${stats.completedBrands > 1 ? 's' : ''}`}
-        </Text>
-      </Pressable>
-
-      <View style={styles.section}>
-        {hasCars ? (
-          <>
-            <SectionHeader title="Tout le garage" trailing={formatNumber(stats.cars)} />
-            <View style={styles.grid}>
-              {garage.map((entry, index) => (
-                <Animated.View
-                  key={entry.id}
-                  entering={FadeIn.delay(Math.min(index, 8) * 40).duration(motion.base)}
-                  style={styles.cell}
-                >
-                  <CarTile entry={entry} onPress={() => router.push(`/car/${entry.id}`)} />
-                </Animated.View>
-              ))}
+        <View style={styles.page}>
+          <Card>
+            <View style={styles.stats}>
+              <StatBlock label="Voitures" value={formatNumber(stats.cars)} />
+              <View style={styles.divider} />
+              <StatBlock label="Niveau" value={String(level)} />
+              <View style={styles.divider} />
+              <StatBlock label="XP" value={formatNumber(stats.xp)} />
             </View>
-          </>
-        ) : (
-          <EmptyState
-            title="Ton garage est vide"
-            subtitle="Trouve une voiture dans la rue et scanne-la pour ouvrir ta première carte."
-          />
-        )}
+
+            <View style={styles.progress}>
+              <ProgressBar ratio={ratio} height={4} />
+              <Text variant="caption" tone="tertiary">
+                {xpToNext > 0
+                  ? `${formatNumber(xpToNext)} XP avant le niveau ${level + 1}`
+                  : 'Niveau maximum atteint'}
+              </Text>
+            </View>
+          </Card>
+
+          {hasCars ? (
+            <View style={styles.block}>
+              <SectionHeader title="Raretés" />
+              <RarityBar counts={stats.rarityCounts} />
+              <View style={styles.legend}>
+                <RarityBreakdown counts={stats.rarityCounts} />
+              </View>
+            </View>
+          ) : null}
+
+          <Card onPress={() => router.push('/(tabs)/collections')} style={styles.block}>
+            <View style={styles.cardHead}>
+              <Text variant="headline">Collections</Text>
+              <Icon name="chevron" size={15} color={colors.textTertiary} />
+            </View>
+
+            <View style={styles.strip}>
+              <BrandStrip brands={stats.brands} />
+            </View>
+
+            <View style={styles.collectionProgress}>
+              <ProgressBar ratio={ownedCarIds.size / CARS.length} height={3} />
+              <Text variant="caption" tone="tertiary">
+                {ownedCarIds.size} / {CARS.length} modèles · {stats.completedBrands} /{' '}
+                {BRANDS.length} marques complètes
+              </Text>
+            </View>
+          </Card>
+
+          {/* No empty state here — the hero already says the garage is empty,
+              and saying it twice on one screen reads as a bug. */}
+          {hasCars ? (
+            <View style={styles.block}>
+              <SectionHeader title="Tout le garage" trailing={formatNumber(stats.cars)} />
+              <View style={styles.grid}>
+                {garage.map((entry, index) => (
+                  <Animated.View
+                    key={entry.id}
+                    entering={FadeIn.delay(Math.min(index, 8) * 40).duration(motion.base)}
+                    style={styles.cell}
+                  >
+                    <CarTile entry={entry} onPress={() => router.push(`/car/${entry.id}`)} />
+                  </Animated.View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+        </View>
+      </Screen>
+
+      {/* Scanning is the whole app, so the button never scrolls away.
+          No scan counter on purpose — a countdown reads as a warning. */}
+      <View style={styles.dock} pointerEvents="box-none">
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Scrim height="100%" strength={1} bands={10} />
+        </View>
+        <Button
+          label="Scanner une voiture"
+          size="xl"
+          onPress={() => router.push('/(tabs)/scan')}
+        />
       </View>
-    </Screen>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  glow: {
-    position: 'absolute',
-    top: -160,
-    left: -gutter,
-    right: 0,
-    alignItems: 'center',
+  root: {
+    flex: 1,
+    backgroundColor: colors.bg,
   },
-  headline: {
-    marginTop: spacing.lg,
+  content: {
+    paddingBottom: DOCK_HEIGHT,
+  },
+  page: {
+    paddingHorizontal: gutter,
+    marginTop: spacing.xl,
+  },
+  stats: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
-  count: {
-    gap: spacing.xs,
-    flexShrink: 1,
-  },
-  levelBlock: {
-    alignItems: 'flex-end',
-    gap: 2,
-    paddingTop: spacing.sm,
+  divider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: colors.border,
   },
   progress: {
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
     gap: spacing.sm,
   },
-  rarity: {
-    marginTop: spacing.xl,
-  },
-  featured: {
+  block: {
     marginTop: spacing.xxl,
   },
-  cta: {
-    marginTop: spacing.xxl,
-  },
-  section: {
-    marginTop: spacing.xxl,
-  },
-  progressionHint: {
+  legend: {
     marginTop: spacing.md,
+  },
+  cardHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  strip: {
+    marginTop: spacing.lg,
+  },
+  collectionProgress: {
+    marginTop: spacing.lg,
+    gap: spacing.sm,
   },
   grid: {
     flexDirection: 'row',
@@ -179,5 +184,14 @@ const styles = StyleSheet.create({
   },
   cell: {
     width: gridItemWidth(2),
+  },
+  dock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: gutter,
+    paddingTop: spacing.xxxl,
+    paddingBottom: spacing.lg,
   },
 });

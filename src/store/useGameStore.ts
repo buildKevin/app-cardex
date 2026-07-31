@@ -17,6 +17,8 @@ interface Profile {
   username: string;
   accountId: string | null;
   email: string | null;
+  /** Local file uri of the picked avatar, null for the initials fallback. */
+  avatarUri: string | null;
   /** How the account was created, shown in the profile. */
   provider: 'apple' | 'google' | 'local' | null;
 }
@@ -41,6 +43,8 @@ interface GameState {
   setPro: (value: boolean) => void;
   setAccount: (accountId: string | null, email: string | null, provider: Profile['provider']) => void;
   setUsername: (username: string) => void;
+  /** Local uri of the avatar picture, or null to fall back to the initials. */
+  setAvatar: (uri: string | null) => void;
   consumeScan: () => void;
   addScan: (result: VisionResult, photoUri: string | null) => GarageEntry;
   toggleShowcase: (entryId: string) => void;
@@ -60,6 +64,7 @@ const initialProfile: Profile = {
   username: 'Collectionneur',
   accountId: null,
   email: null,
+  avatarUri: null,
   provider: null,
 };
 
@@ -83,6 +88,8 @@ export const useGameStore = create<GameState>()(
 
       setUsername: (username) =>
         set((state) => ({ profile: { ...state.profile, username: username.trim() || 'Collectionneur' } })),
+
+      setAvatar: (uri) => set((state) => ({ profile: { ...state.profile, avatarUri: uri } })),
 
       consumeScan: () => set((state) => ({ scanCount: state.scanCount + 1 })),
 
@@ -152,7 +159,11 @@ export const useGameStore = create<GameState>()(
       signOutLocal: () =>
         set((state) => ({
           onboarded: false,
-          profile: { ...initialProfile, username: state.profile.username },
+          profile: {
+            ...initialProfile,
+            username: state.profile.username,
+            avatarUri: state.profile.avatarUri,
+          },
         })),
 
       reset: () =>
@@ -167,7 +178,7 @@ export const useGameStore = create<GameState>()(
     }),
     {
       name: 'cardex-v1',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => AsyncStorage),
       /**
        * State written by an older build is missing fields added since. Without a
@@ -196,6 +207,11 @@ export const useGameStore = create<GameState>()(
             state.isPro = legacy;
             delete (state as Record<string, unknown>).isFounder;
           }
+        }
+
+        // v4 added the avatar picture. An older profile simply has none.
+        if (version < 4 && state.profile && state.profile.avatarUri === undefined) {
+          state.profile = { ...state.profile, avatarUri: null };
         }
 
         return state as GameState;

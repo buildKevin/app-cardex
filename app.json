@@ -48,6 +48,14 @@
           "recordAudioAndroid": false
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CarDex accède à tes photos pour que tu puisses choisir ta photo de profil.",
+          "cameraPermission": "CarDex utilise l'appareil photo pour identifier les voitures que tu scannes.",
+          "microphonePermission": false
+        }
+      ],
       "expo-web-browser",
       [
         "expo-splash-screen",
