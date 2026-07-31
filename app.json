@@ -11,11 +11,6 @@
     "assetBundlePatterns": [
       "**/*"
     ],
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.buildkevin.cardex",
@@ -55,7 +50,14 @@
         }
       ],
       "expo-web-browser",
-      "expo-splash-screen",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ],
       "expo-apple-authentication"
     ],
     "experiments": {
