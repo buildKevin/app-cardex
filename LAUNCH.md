@@ -46,13 +46,29 @@ Dashboard → Authentication → Providers → Anonymous.
 
 ### 2.1 Providers OAuth Supabase
 
-Dashboard → Authentication → Providers, sur le projet `ykqdkadtdsdxujgqnbmp` :
+Dashboard → Authentication → Providers, sur le projet `ykqdkadtdsdxujgqnbmp`.
 
-- **Apple** — nécessaire pour que le bouton natif obtienne une session. Il faut un
-  Service ID et une clé privée depuis ton compte Apple Developer.
-- **Google** — Client ID + secret depuis Google Cloud Console.
+**Apple — 30 secondes, faisable tout de suite.** Comme on utilise le flux **natif**
+(`signInWithIdToken`), un seul champ est nécessaire :
 
-Sans ça, seul « Continuer sans compte » aboutit contre l'hébergé.
+> **Client IDs** = `com.cardex.app`
+
+Pas de Team ID, pas de Services ID, pas de clé `.p8` : ceux-là ne servent qu'au flux
+web/OAuth, qu'on n'utilise plus pour Apple. La doc Supabase le dit explicitement —
+« Register all of the App IDs that will be using your Supabase project […] under
+Client IDs ».
+
+Côté Apple, la capability « Sign In with Apple » sur l'App ID est posée
+**automatiquement par EAS** au premier build (« EAS Build will use iOS capabilities
+signing to enable the required capabilities before building »). Xcode ne serait requis
+que sans EAS. Rien à générer à la main, et rien qui bloque la config Supabase.
+
+**Google — le seul qui demande du travail.** Client ID + secret depuis Google Cloud
+Console, parce que Google passe encore par le flux web (`signInWithOAuth`). Si tu veux
+t'en passer au lancement, Apple + « Continuer sans compte » suffisent : Apple est le
+seul obligatoire sur iOS.
+
+Sans provider configuré, seul « Continuer sans compte » aboutit contre l'hébergé.
 
 ### 2.2 RevenueCat
 
