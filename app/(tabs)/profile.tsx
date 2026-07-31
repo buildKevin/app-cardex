@@ -8,6 +8,7 @@ import { Alert, Linking, Pressable, StyleSheet, TextInput, View } from 'react-na
 
 import { Avatar } from '../../src/components/Avatar';
 import { BadgeTile } from '../../src/components/BadgeTile';
+import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { CarSilhouette } from '../../src/components/CarSilhouette';
 import { Icon } from '../../src/components/Icon';
@@ -34,13 +35,16 @@ import {
   type ProStatus,
 } from '../../src/services/purchases';
 import { visionMode } from '../../src/services/vision';
-import { SHOWCASE_SIZE, useGameStore, useStats } from '../../src/store/useGameStore';
+import { SHOWCASE_SIZE, useGameStore, useScansLeft, useStats } from '../../src/store/useGameStore';
 import { colors, fonts, gridItemWidth, gutter, radii, spacing, type } from '../../src/theme';
 
 type Busy = 'restore' | 'manage' | 'signout' | 'delete' | null;
 
 /** One badge per brand: the full grid is far longer than the rest of the page. */
 const BADGE_PREVIEW = 4;
+
+/** A teaser, not the full argument — the paywall makes that one. */
+const PRO_PERKS = ['Scans illimités', 'Badge Pro sur ton profil', 'Aucune publicité, jamais'];
 
 const PLAN_LABEL: Record<string, string> = {
   lifetime: 'À vie',
@@ -63,6 +67,7 @@ const VISION_LABEL: Record<string, string> = {
 export default function Profile() {
   const router = useRouter();
   const stats = useStats();
+  const scansLeft = useScansLeft();
 
   const profile = useGameStore((state) => state.profile);
   const setUsername = useGameStore((state) => state.setUsername);
@@ -358,6 +363,44 @@ export default function Profile() {
         ) : null}
       </View>
 
+      {/* An upsell is not a setting: as a plain row it read exactly like
+          "Restaurer un achat" sitting under it. */}
+      {!isPro ? (
+        <View style={styles.upsell}>
+          <View style={styles.upsellHead}>
+            <View style={styles.upsellMedal}>
+              <Icon name="star" size={16} color={colors.textInverted} />
+            </View>
+            <View style={styles.upsellTitle}>
+              <Text variant="headline">CarDex Pro</Text>
+              <Text variant="caption" tone="tertiary">
+                {scansLeft > 0
+                  ? `Il te reste ${scansLeft} scan${scansLeft > 1 ? 's' : ''} gratuit${scansLeft > 1 ? 's' : ''}`
+                  : 'Tes scans gratuits sont épuisés'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.upsellPerks}>
+            {PRO_PERKS.map((perk) => (
+              <View key={perk} style={styles.upsellPerk}>
+                <Icon name="check" size={14} color={colors.textSecondary} strokeWidth={2} />
+                <Text variant="label" tone="secondary">
+                  {perk}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <Button
+            label="Débloquer"
+            size="md"
+            onPress={() => router.push('/paywall?context=profile')}
+            disabled={busy !== null}
+          />
+        </View>
+      ) : null}
+
       <SettingsGroup title="Compte">
         <SettingsRow
           label="Connexion"
@@ -387,14 +430,7 @@ export default function Profile() {
             : undefined
         }
       >
-        {!isPro ? (
-          <SettingsRow
-            label="Passer à CarDex Pro"
-            hint="Scans illimités"
-            onPress={() => router.push('/paywall?context=profile')}
-            disabled={busy !== null}
-          />
-        ) : (
+        {isPro ? (
           <SettingsRow
             label="Formule"
             value={
@@ -404,7 +440,7 @@ export default function Profile() {
             }
             badge={pro?.isTrial ? 'Essai' : undefined}
           />
-        )}
+        ) : null}
 
         {/* A lifetime purchase has nothing to manage, and the Customer Center
             would open on an empty screen. */}
@@ -605,6 +641,40 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+  },
+  upsell: {
+    marginTop: spacing.xxl,
+    padding: spacing.lg,
+    gap: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderStrong,
+  },
+  upsellHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  upsellMedal: {
+    width: 34,
+    height: 34,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+  },
+  upsellTitle: {
+    flex: 1,
+    gap: 2,
+  },
+  upsellPerks: {
+    gap: spacing.sm,
+  },
+  upsellPerk: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   footer: {
     marginTop: spacing.xxl,
