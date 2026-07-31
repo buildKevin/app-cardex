@@ -4,15 +4,20 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Button } from '../../src/components/Button';
 import { CarTile } from '../../src/components/CarTile';
+import { CollectionMatrix } from '../../src/components/CollectionMatrix';
 import { EmptyState } from '../../src/components/EmptyState';
+import { FeaturedCar } from '../../src/components/FeaturedCar';
+import { Glow } from '../../src/components/Glow';
 import { ProgressBar } from '../../src/components/ProgressBar';
 import { RarityBreakdown } from '../../src/components/RarityBreakdown';
 import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { Text } from '../../src/components/Text';
+import { CARS } from '../../src/data/cars';
 import { formatNumber } from '../../src/lib/format';
+import { rarityColor } from '../../src/lib/rarity';
 import { useGameStore, useStats } from '../../src/store/useGameStore';
-import { gridItemWidth, motion, spacing } from '../../src/theme';
+import { gridItemWidth, gutter, motion, spacing } from '../../src/theme';
 
 export default function Garage() {
   const router = useRouter();
@@ -21,31 +26,43 @@ export default function Garage() {
 
   const { level, xpToNext, ratio } = stats.progress;
   const hasCars = stats.cars > 0;
+  const featured = garage[0];
+
+  const ownedCarIds = new Set(
+    garage.map((entry) => entry.carId).filter((id): id is string => Boolean(id)),
+  );
 
   return (
     <Screen scroll>
+      {/* Soft halo in the rarity of the latest find — the only depth cue. */}
+      {featured ? (
+        <View style={styles.glow} pointerEvents="none">
+          <Glow color={rarityColor(featured.rarity)} width={420} intensity={0.2} />
+        </View>
+      ) : null}
+
       <Text variant="overline" tone="tertiary" uppercase>
         Garage
       </Text>
 
-      {/* One focal figure; everything else is a supporting line. */}
-      <View style={styles.hero}>
-        <Text variant="hero">{formatNumber(stats.cars)}</Text>
-        <Text variant="body" tone="secondary">
-          {stats.cars === 1 ? 'voiture collectionnée' : 'voitures collectionnées'}
-        </Text>
-      </View>
-
-      <View style={styles.level}>
-        <View style={styles.levelRow}>
-          <Text variant="bodyMedium">Niveau {level}</Text>
-          <Text variant="bodyMedium" tone="secondary">
-            {formatNumber(stats.xp)} XP
+      <View style={styles.headline}>
+        <View style={styles.count}>
+          <Text variant="hero">{formatNumber(stats.cars)}</Text>
+          <Text variant="body" tone="secondary">
+            {stats.cars === 1 ? 'voiture collectionnée' : 'voitures collectionnées'}
           </Text>
         </View>
 
-        <ProgressBar ratio={ratio} height={2} />
+        <View style={styles.levelBlock}>
+          <Text variant="bodyMedium">Niveau {level}</Text>
+          <Text variant="caption" tone="tertiary">
+            {formatNumber(stats.xp)} XP
+          </Text>
+        </View>
+      </View>
 
+      <View style={styles.progress}>
+        <ProgressBar ratio={ratio} height={2} />
         <Text variant="caption" tone="tertiary">
           {xpToNext > 0
             ? `${formatNumber(xpToNext)} XP avant le niveau ${level + 1}`
@@ -54,12 +71,19 @@ export default function Garage() {
       </View>
 
       {hasCars ? (
-        <View style={styles.rarity}>
-          <RarityBreakdown counts={stats.rarityCounts} />
-        </View>
+        <>
+          <View style={styles.rarity}>
+            <RarityBreakdown counts={stats.rarityCounts} />
+          </View>
+
+          <View style={styles.featured}>
+            <SectionHeader title="Dernière découverte" />
+            <FeaturedCar entry={featured} onPress={() => router.push(`/car/${featured.id}`)} />
+          </View>
+        </>
       ) : null}
 
-      {/* No scan counter here on purpose — a countdown reads as a warning. */}
+      {/* No scan counter on purpose — a countdown reads as a warning. */}
       <Button
         label="Scanner une voiture"
         size="xl"
@@ -68,9 +92,17 @@ export default function Garage() {
       />
 
       <View style={styles.section}>
+        <SectionHeader title="Progression" trailing={`${ownedCarIds.size} / ${CARS.length}`} />
+        <CollectionMatrix ownedCarIds={ownedCarIds} />
+        <Text variant="caption" tone="tertiary" style={styles.matrixHint}>
+          Une colonne par marque, cinq voitures à trouver dans chacune.
+        </Text>
+      </View>
+
+      <View style={styles.section}>
         {hasCars ? (
           <>
-            <SectionHeader title="Dernières découvertes" trailing={formatNumber(stats.cars)} />
+            <SectionHeader title="Tout le garage" trailing={formatNumber(stats.cars)} />
             <View style={styles.grid}>
               {garage.map((entry, index) => (
                 <Animated.View
@@ -95,27 +127,46 @@ export default function Garage() {
 }
 
 const styles = StyleSheet.create({
-  hero: {
+  glow: {
+    position: 'absolute',
+    top: -160,
+    left: -gutter,
+    right: 0,
+    alignItems: 'center',
+  },
+  headline: {
     marginTop: spacing.lg,
-    gap: spacing.xs,
-  },
-  level: {
-    marginTop: spacing.xxl,
-    gap: spacing.sm,
-  },
-  levelRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+  },
+  count: {
+    gap: spacing.xs,
+    flexShrink: 1,
+  },
+  levelBlock: {
+    alignItems: 'flex-end',
+    gap: 2,
+    paddingTop: spacing.sm,
+  },
+  progress: {
+    marginTop: spacing.xl,
+    gap: spacing.sm,
   },
   rarity: {
     marginTop: spacing.xl,
+  },
+  featured: {
+    marginTop: spacing.xxl,
   },
   cta: {
     marginTop: spacing.xxl,
   },
   section: {
     marginTop: spacing.xxl,
+  },
+  matrixHint: {
+    marginTop: spacing.md,
   },
   grid: {
     flexDirection: 'row',
