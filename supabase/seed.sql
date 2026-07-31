@@ -6,7 +6,7 @@ insert into public.collections (id, name, country, size, aliases) values
   ('lamborghini', 'Lamborghini', 'Italie', 5, array['lamborghini', 'lambo']::text[]),
   ('porsche', 'Porsche', 'Allemagne', 5, array['porsche']::text[]),
   ('bmw', 'BMW', 'Allemagne', 5, array['bmw', 'bayerische motoren werke']::text[]),
-  ('mercedes', 'Mercedes-Benz', 'Allemagne', 5, array['mercedes', 'mercedes benz', 'mercedesbenz', 'benz', 'mb', 'amg']::text[]),
+  ('mercedes', 'Mercedes-Benz', 'Allemagne', 5, array['mercedes', 'mercedes benz', 'mercedesbenz', 'benz', 'amg']::text[]),
   ('audi', 'Audi', 'Allemagne', 5, array['audi']::text[]),
   ('volkswagen', 'Volkswagen', 'Allemagne', 5, array['volkswagen', 'vw']::text[]),
   ('tesla', 'Tesla', 'États-Unis', 5, array['tesla']::text[]),

@@ -27,7 +27,17 @@ Things that already bit us on SDK 57 / RN 0.86:
 - **Every external service degrades to a no-op** when its key is missing, so the
   app always runs with an empty `.env`. Keep that property.
 - **The free-scan limit is enforced twice**: client-side for UX, and in Postgres
-  via `consume_scan()` so it cannot be bypassed.
+  so it cannot be bypassed. Server side it is two-phase — `begin_scan()` before
+  the model call (refuse early, never pay for a request we'd reject), then
+  `commit_scan()` only if the result matched the catalogue. An uncatalogued car
+  is our gap, so it never costs the player a scan.
+- **`match_car_id()` in Postgres mirrors `src/lib/match.ts`.** Two
+  implementations exist because the server cannot trust the client's verdict for
+  accounting. If you touch either, re-run the equivalence check that asserts
+  both agree on every catalogue car — a silent divergence means players get
+  charged for scans they shouldn't.
+- **Brand matching scores by longest matching alias, never array order.** Order
+  dependence was a real bug: "lamborghini" contains "mb".
 - After editing `src/data/`, run `node scripts/generate-seed.mjs`.
 - iOS native builds on this machine need a UTF-8 locale:
   `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx expo run:ios`.

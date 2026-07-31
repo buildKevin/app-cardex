@@ -5,8 +5,8 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { getCar } from '../data/cars';
 import type { GarageEntry, Rarity, VisionResult } from '../data/types';
 import { createId } from '../lib/id';
-import { resolveScan } from '../lib/match';
-import { xpForRarity } from '../lib/rarity';
+import { cleanModelName, resolveScan } from '../lib/match';
+import { brandBaselineRarity, xpForRarity } from '../lib/rarity';
 import { computeStats, type Stats } from '../lib/stats';
 
 /** Free tier ceiling. */
@@ -68,14 +68,16 @@ export const useGameStore = create<GameState>()(
 
       addScan: (result, photoUri) => {
         const { car, brand } = resolveScan(result);
-        const rarity: Rarity = car?.rarity ?? 'common';
+        // An uncatalogued car inherits its brand's typical tier rather than the
+        // floor, so recognising a Ferrari we do not list still feels like one.
+        const rarity: Rarity = car?.rarity ?? brandBaselineRarity(brand?.id);
 
         const entry: GarageEntry = {
           id: createId(),
           carId: car?.id ?? null,
           brandId: brand?.id ?? null,
-          make: brand?.name ?? result.make,
-          model: car?.model ?? result.model,
+          make: brand?.name ?? cleanModelName(result.make),
+          model: car?.model ?? cleanModelName(result.model),
           year: result.year ?? car?.yearFrom ?? null,
           rarity,
           photoUri,

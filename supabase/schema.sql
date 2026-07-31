@@ -45,7 +45,12 @@ create table if not exists public.users (
   id          uuid primary key references auth.users (id) on delete cascade,
   username    text not null default 'Collectionneur',
   is_founder  boolean not null default false,
+  -- Scans that actually matched the catalogue. This is the paywall counter.
   scan_count  integer not null default 0,
+  -- Every vision call, matched or not. Only a ceiling against abuse: without
+  -- it, a free user parked at 9/10 could photograph uncatalogued cars forever
+  -- and bill us for a model call each time.
+  vision_calls integer not null default 0,
   -- Up to three garage ids shown large on the profile.
   showcase    uuid[] not null default '{}',
   created_at  timestamptz not null default now(),
@@ -160,10 +165,100 @@ drop policy if exists "write own scans" on storage.objects;
 create policy "write own scans" on storage.objects
   for insert with check (bucket_id = 'scans' and (storage.foldername(name))[1] = auth.uid()::text);
 
--- ────────────────────────────────────────────── free-tier scan counter ─────
--- Called by the identify-car edge function. Returns false when the free
--- allowance is exhausted, so the limit cannot be bypassed from the client.
-create or replace function public.consume_scan(p_user_id uuid, p_free_limit integer default 10)
+-- ─────────────────────────────────────────── authoritative car matching ────
+-- Mirrors src/lib/match.ts. The client matches locally for display, but the
+-- server must reach the same verdict on its own to decide whether a scan is
+-- chargeable — a client is free to lie about having missed.
+-- Strips the accents we actually use, without requiring the unaccent extension
+-- (unavailable on some managed tiers).
+create or replace function public.unaccent_lite(p_input text)
+returns text
+language sql
+immutable
+as $$
+  select translate(
+    p_input,
+    'àáâãäåçèéêëìíîïñòóôõöùúûüýÿÀÁÂÃÄÅÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝ',
+    'aaaaaaceeeeiiiinooooouuuuyyAAAAAACEEEEIIIINOOOOOUUUUY'
+  )
+$$;
+
+create or replace function public.normalize_name(p_input text)
+returns text
+language sql
+immutable
+as $$
+  select trim(regexp_replace(lower(unaccent_lite(p_input)), '[^a-z0-9]+', ' ', 'g'))
+$$;
+
+/**
+ * Returns the catalogue car id for a make/model pair, or null.
+ * Longest matching alias wins, so "Golf GTI" cannot resolve to a plain Golf.
+ */
+create or replace function public.match_car_id(p_make text, p_model text)
+returns text
+language plpgsql
+stable
+security definer set search_path = public
+as $$
+declare
+  v_make       text := normalize_name(coalesce(p_make, ''));
+  v_model      text := normalize_name(coalesce(p_model, ''));
+  v_collection text;
+  v_car_id     text;
+begin
+  if v_make = '' or v_model = '' then
+    return null;
+  end if;
+
+  -- Brand first: longest matching alias wins, exact match ahead of it. Ordering
+  -- by brand name instead would let a short alias on an unrelated brand hijack
+  -- the make ("lamborghini" contains Mercedes' old "mb" alias).
+  select c.id into v_collection
+  from public.collections c
+  cross join lateral (
+    select cand, length(cand) as len, (v_make = cand) as exact
+    from unnest(array[normalize_name(c.name)] || (
+      select coalesce(array_agg(normalize_name(a)), '{}') from unnest(c.aliases) a
+    )) cand
+    where cand <> ''
+      and (v_make = cand or v_make like '%' || cand || '%' or cand like '%' || v_make || '%')
+  ) b
+  order by b.exact desc, b.len desc
+  limit 1;
+
+  if v_collection is null then
+    return null;
+  end if;
+
+  -- Then the model, taking the longest alias that matches.
+  select car.id into v_car_id
+  from public.cars car
+  cross join lateral (
+    select cand, length(cand) as len, (v_model = cand) as exact
+    from unnest(array[normalize_name(car.model)] || (
+      select coalesce(array_agg(normalize_name(a)), '{}') from unnest(car.aliases) a
+    )) cand
+    where cand <> ''
+      and (v_model = cand or v_model like '%' || cand || '%' or cand like '%' || v_model || '%')
+  ) m
+  where car.collection_id = v_collection
+  order by m.exact desc, m.len desc
+  limit 1;
+
+  return v_car_id;
+end $$;
+
+-- ────────────────────────────────────────── free-tier scan accounting ──────
+-- Two-phase on purpose. begin_scan runs BEFORE the model call, so we never pay
+-- for a request we were going to refuse; commit_scan runs AFTER, and only when
+-- the result matched the catalogue, so a gap in our own data costs the player
+-- nothing.
+create or replace function public.begin_scan(
+  p_user_id     uuid,
+  p_free_limit  integer default 10,
+  p_call_ceiling integer default 40
+)
 returns boolean
 language plpgsql
 security definer set search_path = public
@@ -171,8 +266,10 @@ as $$
 declare
   v_founder boolean;
   v_count   integer;
+  v_calls   integer;
 begin
-  select is_founder, scan_count into v_founder, v_count
+  select is_founder, scan_count, vision_calls
+    into v_founder, v_count, v_calls
   from public.users where id = p_user_id for update;
 
   if not found then
@@ -183,9 +280,29 @@ begin
     return false;
   end if;
 
+  -- Bounds the cost of repeated misses without ever troubling an honest player.
+  if not v_founder and v_calls >= p_call_ceiling then
+    return false;
+  end if;
+
   update public.users
-     set scan_count = scan_count + 1, updated_at = now()
+     set vision_calls = vision_calls + 1, updated_at = now()
    where id = p_user_id;
 
   return true;
 end $$;
+
+create or replace function public.commit_scan(p_user_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.users
+     set scan_count = scan_count + 1, updated_at = now()
+   where id = p_user_id;
+end $$;
+
+-- Superseded by begin_scan/commit_scan; dropped so no caller can rely on the
+-- old single-phase behaviour that charged before knowing the result.
+drop function if exists public.consume_scan(uuid, integer);

@@ -12,21 +12,52 @@ export function normalize(input: string): string {
     .trim();
 }
 
+/**
+ * Tidies a model name that came straight from the vision model, for the cases
+ * where we have nothing better to display.
+ *
+ * This only fixes whitespace, stray punctuation and runaway length — it cannot
+ * merge genuinely different spellings, so "Golf 8" and "Golf VIII" still land
+ * as two distinct entries. Growing the catalogue is the real fix.
+ */
+export function cleanModelName(raw: string): string {
+  return raw
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s\-–—.,;:]+|[\s\-–—.,;:]+$/g, '')
+    .slice(0, 40)
+    .trim();
+}
+
 export interface ResolvedScan {
   brand?: Brand;
   car?: Car;
 }
 
+/**
+ * Longest matching alias wins, exact match first — never array order.
+ *
+ * Relying on the order of BRANDS was a latent bug: "lamborghini" contains "mb",
+ * so a short alias on an unrelated brand could hijack a make simply by being
+ * declared earlier. Scoring by specificity makes the verdict independent of
+ * declaration order, which is also what lets the SQL side agree with us.
+ */
 function matchBrand(make: string): Brand | undefined {
   const needle = normalize(make);
   if (!needle) return undefined;
 
-  return BRANDS.find((brand) => {
-    const candidates = [brand.name, ...brand.aliases].map(normalize);
-    return candidates.some(
-      (candidate) => needle === candidate || needle.includes(candidate) || candidate.includes(needle),
-    );
-  });
+  let best: { brand: Brand; score: number } | undefined;
+
+  for (const brand of BRANDS) {
+    for (const candidate of [brand.name, ...brand.aliases].map(normalize)) {
+      if (!candidate) continue;
+      const hit = needle === candidate || needle.includes(candidate) || candidate.includes(needle);
+      if (!hit) continue;
+      const score = candidate.length + (needle === candidate ? 100 : 0);
+      if (!best || score > best.score) best = { brand, score };
+    }
+  }
+
+  return best?.brand;
 }
 
 function matchCar(brand: Brand, model: string): Car | undefined {

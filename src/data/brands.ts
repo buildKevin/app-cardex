@@ -9,7 +9,7 @@ export const BRANDS: Brand[] = [
     id: 'mercedes',
     name: 'Mercedes-Benz',
     country: 'Allemagne',
-    aliases: ['mercedes', 'mercedes benz', 'mercedesbenz', 'benz', 'mb', 'amg'],
+    aliases: ['mercedes', 'mercedes benz', 'mercedesbenz', 'benz', 'amg'],
   },
   { id: 'audi', name: 'Audi', country: 'Allemagne', aliases: ['audi'] },
   { id: 'volkswagen', name: 'Volkswagen', country: 'Allemagne', aliases: ['volkswagen', 'vw'] },

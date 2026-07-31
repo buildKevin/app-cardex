@@ -94,14 +94,22 @@ export default function Scan() {
       const result = await identifyCar(photo.base64);
 
       const entry = addScan(result, photo.uri);
-      consumeScan();
+
+      // Only a catalogue match costs a scan. Burning one of ten free scans on a
+      // car we simply do not list yet is our gap, not the player's.
+      const matched = entry.carId !== null;
+      if (matched) consumeScan();
 
       track(events.scanSucceeded, {
         make: entry.make,
         model: entry.model,
         rarity: entry.rarity,
-        matched: entry.carId !== null,
+        matched,
+        charged: matched,
         confidence: Math.round(result.confidence * 100) / 100,
+        // Raw strings on a miss: this is the list of cars worth adding next.
+        raw_make: matched ? undefined : result.make,
+        raw_model: matched ? undefined : result.model,
       });
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

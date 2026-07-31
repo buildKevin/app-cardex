@@ -2,7 +2,9 @@
  * identify-car — the only server-side piece the MVP needs.
  *
  * 1. Authenticates the caller.
- * 2. Enforces the free-scan limit in the database (the client cannot bypass it).
+ * 2. Enforces the free-scan limit in the database, in two phases: it refuses
+ *    before paying for a model call, and only charges the scan afterwards if
+ *    the result actually matched the catalogue.
  * 3. Asks the vision model for make / model / generation / year / confidence.
  *
  * It deliberately does NOT ask the model for power, price, country or rarity:
@@ -17,6 +19,8 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 const MODEL = Deno.env.get('VISION_MODEL') ?? 'gpt-4o-mini';
 const FREE_SCAN_LIMIT = Number(Deno.env.get('FREE_SCAN_LIMIT') ?? '10');
+/** Hard ceiling on model calls per free account, matched or not. */
+const VISION_CALL_CEILING = Number(Deno.env.get('VISION_CALL_CEILING') ?? '40');
 
 const PROMPT = [
   'Tu es un expert en identification automobile.',
@@ -69,12 +73,13 @@ Deno.serve(async (req) => {
     return json({ error: 'bad_request' }, 400);
   }
 
-  // Free-tier gate, decided by the database.
-  const { data: allowed, error: consumeError } = await supabase.rpc('consume_scan', {
+  // Phase 1 — decided by the database, before we spend anything on the model.
+  const { data: allowed, error: beginError } = await supabase.rpc('begin_scan', {
     p_user_id: userData.user.id,
     p_free_limit: FREE_SCAN_LIMIT,
+    p_call_ceiling: VISION_CALL_CEILING,
   });
-  if (consumeError) return json({ error: 'server_error' }, 500);
+  if (beginError) return json({ error: 'server_error' }, 500);
   if (!allowed) return json({ error: 'scan_limit_reached' }, 402);
 
   if (!OPENAI_KEY) return json({ error: 'vision_not_configured' }, 503);
@@ -109,16 +114,39 @@ Deno.serve(async (req) => {
   const text = payload?.choices?.[0]?.message?.content;
   if (typeof text !== 'string') return json({ error: 'vision_unreadable' }, 502);
 
+  let parsed: Record<string, unknown>;
   try {
-    const parsed = JSON.parse(text);
-    return json({
-      make: parsed.make ?? null,
-      model: parsed.model ?? null,
-      generation: parsed.generation ?? null,
-      year: parsed.year ?? null,
-      confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.6,
-    });
+    parsed = JSON.parse(text);
   } catch {
     return json({ error: 'vision_unreadable' }, 502);
   }
+
+  const make = typeof parsed.make === 'string' ? parsed.make : null;
+  const model = typeof parsed.model === 'string' ? parsed.model : null;
+
+  // Phase 2 — the database decides whether this counts. The client's own
+  // verdict is never trusted for accounting.
+  let carId: string | null = null;
+  if (make && model) {
+    const { data: matched } = await supabase.rpc('match_car_id', {
+      p_make: make,
+      p_model: model,
+    });
+    carId = (matched as string | null) ?? null;
+  }
+
+  if (carId) {
+    await supabase.rpc('commit_scan', { p_user_id: userData.user.id });
+  }
+
+  return json({
+    make,
+    model,
+    generation: parsed.generation ?? null,
+    year: parsed.year ?? null,
+    confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 0.6,
+    // Informational: the client re-matches locally for display.
+    car_id: carId,
+    charged: carId !== null,
+  });
 });

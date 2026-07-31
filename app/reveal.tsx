@@ -117,7 +117,9 @@ export default function Reveal() {
       {!car ? (
         <Animated.View entering={FadeIn.delay(400).duration(motion.base)} style={styles.unlisted}>
           <Text variant="caption" tone="tertiary" center>
-            Pas encore dans nos collections — elle rejoint quand même ton garage.
+            {brand
+              ? `Pas encore dans la collection ${brand.name} — elle rejoint ton garage, garde tes XP, et ce scan ne t'est pas compté.`
+              : "Marque inconnue de notre catalogue — elle rejoint quand même ton garage, et ce scan ne t'est pas compté."}
           </Text>
         </Animated.View>
       ) : null}
