@@ -7,7 +7,17 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "ios": { "simulator": true }
+      "ios": {
+        "simulator": true
+      }
+    },
+    "development-device": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://ykqdkadtdsdxujgqnbmp.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_kKbzyPVd4r0wpcv7xJNZSw_2sD0MlI8"
+      }
     },
     "preview": {
       "distribution": "internal",

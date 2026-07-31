@@ -60,6 +60,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0fd76e9b-321e-4509-922f-b6c0a5637cd2"
+      }
+    },
+    "owner": "buildkevin"
   }
 }
