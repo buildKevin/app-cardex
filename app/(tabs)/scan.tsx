@@ -44,7 +44,7 @@ export default function Scan() {
 
   const consumeScan = useGameStore((state) => state.consumeScan);
   const addScan = useGameStore((state) => state.addScan);
-  const isFounder = useGameStore((state) => state.isFounder);
+  const isPro = useGameStore((state) => state.isPro);
   const accountId = useGameStore((state) => state.profile.accountId);
   const markSynced = useGameStore((state) => state.markSynced);
   const left = useScansLeft();
@@ -79,7 +79,7 @@ export default function Scan() {
   const capture = async () => {
     if (phase === 'working') return;
 
-    if (!isFounder && left <= 0) {
+    if (!isPro && left <= 0) {
       track(events.scanBlockedByLimit);
       router.push('/paywall?context=limit');
       return;

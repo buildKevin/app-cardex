@@ -3,8 +3,8 @@ import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Avatar } from '../../src/components/Avatar';
 import { BadgeTile } from '../../src/components/BadgeTile';
@@ -18,18 +18,32 @@ import { SettingsGroup } from '../../src/components/SettingsGroup';
 import { SettingsRow } from '../../src/components/SettingsRow';
 import { Text } from '../../src/components/Text';
 import { badgeStates, unlockedBadgeCount } from '../../src/data/badges';
-import { formatNumber } from '../../src/lib/format';
+import { formatDiscoveredAt, formatNumber } from '../../src/lib/format';
 import { LEGAL, hasLegalLinks } from '../../src/config/release';
 import { events, resetAnalytics, track } from '../../src/services/analytics';
 import { deleteAccount, signOut } from '../../src/services/auth';
 import { hasSupabase } from '../../src/services/env';
 import { deletePhoto } from '../../src/services/photo';
-import { FOUNDER_FALLBACK_PRICE, restorePurchases } from '../../src/services/purchases';
+import {
+  getCustomerInfo,
+  isPurchasesUiAvailable,
+  presentCustomerCenter,
+  readProStatus,
+  resetPurchaser,
+  restorePurchases,
+  type ProStatus,
+} from '../../src/services/purchases';
 import { visionMode } from '../../src/services/vision';
 import { SHOWCASE_SIZE, useGameStore, useStats } from '../../src/store/useGameStore';
 import { colors, fonts, gridItemWidth, gutter, radii, spacing, type } from '../../src/theme';
 
-type Busy = 'restore' | 'signout' | 'delete' | null;
+type Busy = 'restore' | 'manage' | 'signout' | 'delete' | null;
+
+const PLAN_LABEL: Record<string, string> = {
+  lifetime: 'À vie',
+  yearly: 'Annuel',
+  monthly: 'Mensuel',
+};
 
 const PROVIDER_LABEL: Record<string, string> = {
   apple: 'Apple',
@@ -49,8 +63,8 @@ export default function Profile() {
 
   const profile = useGameStore((state) => state.profile);
   const setUsername = useGameStore((state) => state.setUsername);
-  const isFounder = useGameStore((state) => state.isFounder);
-  const setFounder = useGameStore((state) => state.setFounder);
+  const isPro = useGameStore((state) => state.isPro);
+  const setPro = useGameStore((state) => state.setPro);
   const showcase = useGameStore((state) => state.showcase);
   const garage = useGameStore((state) => state.garage);
   const resetGarage = useGameStore((state) => state.resetGarage);
@@ -59,6 +73,19 @@ export default function Profile() {
 
   const [draftName, setDraftName] = useState(profile.username);
   const [busy, setBusy] = useState<Busy>(null);
+  const [pro, setProStatus] = useState<ProStatus | null>(null);
+
+  // Renewal date and plan come from RevenueCat, never from local state — the
+  // store flag only says whether Pro is on, not what the customer is paying for.
+  useEffect(() => {
+    let live = true;
+    getCustomerInfo().then((info) => {
+      if (live && info) setProStatus(readProStatus(info));
+    });
+    return () => {
+      live = false;
+    };
+  }, [isPro]);
 
   const badges = badgeStates(stats);
   const unlocked = unlockedBadgeCount(stats);
@@ -78,14 +105,53 @@ export default function Profile() {
     setBusy(null);
 
     if (restored) {
-      setFounder(true);
-      Alert.alert('Founder restauré', 'Ton accès à vie est de nouveau actif.');
+      setPro(true);
+      track(events.purchaseRestored, { context: 'profile' });
+      Alert.alert('CarDex Pro restauré', 'Ton accès est de nouveau actif.');
       return;
     }
     Alert.alert(
       'Aucun achat trouvé',
       'Vérifie que tu es bien connecté avec le compte qui a servi à l’achat.',
     );
+  };
+
+  /**
+   * Customer Center: cancel, change plan, request a refund, restore — all
+   * configured in the RevenueCat dashboard. Falls back to the store's own
+   * management page, because Apple requires the subscription to be manageable
+   * from inside the app either way.
+   */
+  const onManageSubscription = async () => {
+    setBusy('manage');
+    track(events.customerCenterOpened);
+
+    const presented = await presentCustomerCenter({
+      onRestoreCompleted: (info) => setPro(readProStatus(info).isPro),
+      onShowingManageSubscriptions: () => track(events.subscriptionManaged),
+      onFeedbackSurveyCompleted: (optionId) =>
+        track(events.churnSurveyCompleted, { option: optionId }),
+    });
+
+    if (!presented) {
+      const url = pro?.managementUrl;
+      if (url) await Linking.openURL(url).catch(() => {});
+      else {
+        Alert.alert(
+          'Gestion indisponible',
+          'Ouvre les réglages de ton compte App Store ou Google Play pour gérer ton abonnement.',
+        );
+      }
+    }
+
+    // Whatever happened in there may have changed the subscription.
+    const info = await getCustomerInfo();
+    if (info) {
+      const status = readProStatus(info);
+      setProStatus(status);
+      setPro(status.isPro);
+    }
+    setBusy(null);
   };
 
   const onResetGarage = () => {
@@ -114,6 +180,9 @@ export default function Profile() {
         onPress: async () => {
           setBusy('signout');
           await signOut();
+          // Back to an anonymous RevenueCat id, or the next person to sign in
+          // on this device inherits these entitlements.
+          await resetPurchaser();
           track(events.signedOut);
           resetAnalytics();
           signOutLocal();
@@ -191,11 +260,11 @@ export default function Profile() {
           </View>
         </View>
 
-        {isFounder ? (
-          <View style={styles.founder}>
+        {isPro ? (
+          <View style={styles.proBadge}>
             <Icon name="star" size={13} color={colors.textInverted} />
             <Text variant="overline" tone="inverted" uppercase>
-              Founder
+              Pro
             </Text>
           </View>
         ) : null}
@@ -283,21 +352,55 @@ export default function Profile() {
         />
         <SettingsRow
           label="Statut"
-          value={isFounder ? undefined : 'Gratuit'}
-          badge={isFounder ? 'Founder' : undefined}
+          value={isPro ? undefined : 'Gratuit'}
+          badge={isPro ? 'CarDex Pro' : undefined}
           last
         />
       </SettingsGroup>
 
-      <SettingsGroup title="Achats">
-        {!isFounder ? (
+      <SettingsGroup
+        title="Abonnement"
+        footnote={
+          // Only say "renews" when it actually will: a cancelled subscription
+          // still reads as active until the period ends.
+          pro?.isPro && pro.expiresAt
+            ? pro.willRenew
+              ? `Renouvellement le ${formatDiscoveredAt(pro.expiresAt)}.`
+              : `Actif jusqu’au ${formatDiscoveredAt(pro.expiresAt)}, sans renouvellement.`
+            : undefined
+        }
+      >
+        {!isPro ? (
           <SettingsRow
-            label="Passer Founder"
-            value={`${FOUNDER_FALLBACK_PRICE} à vie`}
+            label="Passer à CarDex Pro"
+            hint="Scans illimités"
             onPress={() => router.push('/paywall?context=profile')}
             disabled={busy !== null}
           />
+        ) : (
+          <SettingsRow
+            label="Formule"
+            value={
+              pro?.productIdentifier
+                ? (PLAN_LABEL[pro.productIdentifier] ?? pro.productIdentifier)
+                : 'CarDex Pro'
+            }
+            badge={pro?.isTrial ? 'Essai' : undefined}
+          />
+        )}
+
+        {/* A lifetime purchase has nothing to manage, and the Customer Center
+            would open on an empty screen. */}
+        {isPro && pro?.productIdentifier !== 'lifetime' ? (
+          <SettingsRow
+            label="Gérer mon abonnement"
+            hint={isPurchasesUiAvailable() ? 'Changer de formule, annuler, remboursement' : 'Ouvre le store'}
+            onPress={onManageSubscription}
+            loading={busy === 'manage'}
+            disabled={busy !== null && busy !== 'manage'}
+          />
         ) : null}
+
         <SettingsRow
           label="Restaurer un achat"
           onPress={onRestore}
@@ -401,7 +504,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     padding: 0,
   },
-  founder: {
+  proBadge: {
     position: 'absolute',
     top: spacing.lg,
     right: spacing.lg,

@@ -59,8 +59,22 @@ if (!prod.EXPO_PUBLIC_SUPPORT_URL) {
 // ── Purchases ─────────────────────────────────────────────────────────────────
 if (!prod.EXPO_PUBLIC_REVENUECAT_IOS_KEY) {
   blockers.push(
-    'EXPO_PUBLIC_REVENUECAT_IOS_KEY is not set — the Founder purchase cannot complete,\n' +
+    'EXPO_PUBLIC_REVENUECAT_IOS_KEY is not set — a CarDex Pro purchase cannot complete,\n' +
       '    and a paywall whose button does nothing is a guaranteed rejection.',
+  );
+} else if (prod.EXPO_PUBLIC_REVENUECAT_IOS_KEY.startsWith('test_')) {
+  blockers.push(
+    'EXPO_PUBLIC_REVENUECAT_IOS_KEY is a Test Store key. Test Store purchases are simulated:\n' +
+      '    nobody would ever be charged, and the subscriptions expire on their own.',
+  );
+}
+
+// The test key wins over the store keys at runtime, so its mere presence in the
+// production profile is enough to ship an app that cannot take real money.
+if (prod.EXPO_PUBLIC_REVENUECAT_TEST_KEY) {
+  blockers.push(
+    'EXPO_PUBLIC_REVENUECAT_TEST_KEY is set for production. It overrides the store keys,\n' +
+      '    so the shipped app would sell simulated subscriptions. Remove it from eas.json.',
   );
 }
 

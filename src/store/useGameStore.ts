@@ -24,7 +24,12 @@ interface Profile {
 interface GameState {
   hydrated: boolean;
   onboarded: boolean;
-  isFounder: boolean;
+  /**
+   * Cache of the CarDex Pro entitlement. RevenueCat's CustomerInfo is the
+   * source of truth; this only exists so the UI does not flicker while the
+   * first customer-info fetch is in flight.
+   */
+  isPro: boolean;
   /** Counts every scan attempt that reached the vision model. */
   scanCount: number;
   garage: GarageEntry[];
@@ -33,7 +38,7 @@ interface GameState {
   profile: Profile;
 
   completeOnboarding: () => void;
-  setFounder: (value: boolean) => void;
+  setPro: (value: boolean) => void;
   setAccount: (accountId: string | null, email: string | null, provider: Profile['provider']) => void;
   setUsername: (username: string) => void;
   consumeScan: () => void;
@@ -63,7 +68,7 @@ export const useGameStore = create<GameState>()(
     (set, get) => ({
       hydrated: false,
       onboarded: false,
-      isFounder: false,
+      isPro: false,
       scanCount: 0,
       garage: [],
       showcase: [],
@@ -71,7 +76,7 @@ export const useGameStore = create<GameState>()(
 
       completeOnboarding: () => set({ onboarded: true }),
 
-      setFounder: (value) => set({ isFounder: value }),
+      setPro: (value) => set({ isPro: value }),
 
       setAccount: (accountId, email, provider) =>
         set((state) => ({ profile: { ...state.profile, accountId, email, provider } })),
@@ -153,7 +158,7 @@ export const useGameStore = create<GameState>()(
       reset: () =>
         set({
           onboarded: false,
-          isFounder: false,
+          isPro: false,
           scanCount: 0,
           garage: [],
           showcase: [],
@@ -162,7 +167,7 @@ export const useGameStore = create<GameState>()(
     }),
     {
       name: 'cardex-v1',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => AsyncStorage),
       /**
        * State written by an older build is missing fields added since. Without a
@@ -181,13 +186,25 @@ export const useGameStore = create<GameState>()(
           };
         }
 
+        // v3 renamed the Founder lifetime purchase to the CarDex Pro
+        // entitlement. Carry the old flag over so an existing buyer is not
+        // shown a paywall on first launch after the update — RevenueCat
+        // corrects it either way as soon as CustomerInfo arrives.
+        if (version < 3) {
+          const legacy = (state as Record<string, unknown>).isFounder;
+          if (typeof legacy === 'boolean') {
+            state.isPro = legacy;
+            delete (state as Record<string, unknown>).isFounder;
+          }
+        }
+
         return state as GameState;
       },
       // Explicit allow-list: `hydrated` is runtime-only, and listing the data
       // keys keeps new actions from ever landing in storage.
       partialize: (state) => ({
         onboarded: state.onboarded,
-        isFounder: state.isFounder,
+        isPro: state.isPro,
         scanCount: state.scanCount,
         garage: state.garage,
         showcase: state.showcase,
@@ -201,9 +218,9 @@ export const useGameStore = create<GameState>()(
   ),
 );
 
-/** Scans left on the free tier, or Infinity for Founders. */
-export function scansLeft(state: Pick<GameState, 'isFounder' | 'scanCount'>): number {
-  if (state.isFounder) return Infinity;
+/** Scans left on the free tier, or Infinity for Pro. */
+export function scansLeft(state: Pick<GameState, 'isPro' | 'scanCount'>): number {
+  if (state.isPro) return Infinity;
   return Math.max(0, FREE_SCAN_LIMIT - state.scanCount);
 }
 

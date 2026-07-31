@@ -31,6 +31,19 @@ Things that already bit us on SDK 57 / RN 0.86:
   the model call (refuse early, never pay for a request we'd reject), then
   `commit_scan()` only if the result matched the catalogue. An uncatalogued car
   is our gap, so it never costs the player a scan.
+- **RevenueCat's `CustomerInfo` is the only source of truth for Pro.** The
+  `isPro` store flag is a cache so the UI does not flicker on cold start; it is
+  written from a `CustomerInfo`, never from a completed transaction. A failed
+  fetch returns null, which means *unknown* — never downgrade on it, or one
+  flaky call locks a paying player out. `app/_layout.tsx` holds the listener.
+- **Pro has to reach Postgres too.** `begin_scan()` reads `users.is_pro`, and
+  the client is forbidden from writing that column, so a subscriber is refused
+  at scan 11 unless the `revenuecat-webhook` edge function is deployed and
+  wired up in the dashboard. The app calls `Purchases.logIn(<supabase user id>)`
+  so the webhook knows which row to update.
+- **The native purchase modules are loaded lazily**, through `require()` inside
+  a try/catch. `react-native-purchases-ui` throws on import in Expo Go and on
+  web, and the app must still run with an empty `.env`.
 - **Online, the server's match wins.** `identify-car` returns `car_id`, and
   `resolveScan()` honours it whenever it is present. The client only matches
   locally in demo mode and the direct-OpenAI dev path, where no scan is charged,

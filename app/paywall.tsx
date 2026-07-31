@@ -1,239 +1,191 @@
 import * as Haptics from 'expo-haptics';
-import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
 
-import { Button } from '../src/components/Button';
-import { Icon } from '../src/components/Icon';
-import { Text } from '../src/components/Text';
-import { LEGAL, hasLegalLinks } from '../src/config/release';
+import { ProPaywallFallback } from '../src/components/ProPaywallFallback';
 import { events, track } from '../src/services/analytics';
 import {
-  FOUNDER_FALLBACK_PRICE,
-  getFounderPrice,
+  getPurchasesUi,
+  isProActive,
   isPurchasesAvailable,
-  purchaseFounder,
+  purchasePlan,
   restorePurchases,
+  type Plan,
 } from '../src/services/purchases';
-import { FREE_SCAN_LIMIT, useGameStore } from '../src/store/useGameStore';
-import { colors, gutter, motion, radii, spacing } from '../src/theme';
+import { useGameStore } from '../src/store/useGameStore';
+import { colors } from '../src/theme';
 
-const PERKS = [
-  'Scans illimités',
-  'Toutes les futures fonctionnalités',
-  'Badge Founder sur ton profil',
-  'Aucune publicité, jamais',
-];
-
+/**
+ * The CarDex Pro paywall.
+ *
+ * Prefers the paywall designed in the RevenueCat dashboard (Paywalls v2), which
+ * means pricing, copy and layout can change without an App Store release. Falls
+ * back to the in-app design when the native UI is unavailable — Expo Go, web,
+ * or an empty `.env`.
+ *
+ * Kept as a route rather than a modal call so every existing
+ * `router.push('/paywall?context=…')` still works.
+ */
 export default function Paywall() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { context } = useLocalSearchParams<{ context?: string }>();
-  const setFounder = useGameStore((state) => state.setFounder);
+  const setPro = useGameStore((state) => state.setPro);
 
-  const [price, setPrice] = useState(FOUNDER_FALLBACK_PRICE);
   const [busy, setBusy] = useState(false);
+  // RevenueCat closes its paywall after a purchase and *then* calls onDismiss,
+  // so leaving is guarded — otherwise the second call pops a screen that was
+  // never part of the paywall, and logs a dismissal for a sale.
+  const left = useRef(false);
 
+  const from = context ?? 'unknown';
   const fromLimit = context === 'limit';
   // Only the onboarding paywall has nothing to go back to.
   const fromOnboarding = context === 'onboarding';
 
-  useEffect(() => {
-    track(events.paywallViewed, { context: context ?? 'unknown' });
-    getFounderPrice().then((value) => {
-      if (value) setPrice(value);
-    });
-  }, [context]);
+  const RevenueCatUI = getPurchasesUi();
 
-  const leave = () => {
-    track(events.paywallDismissed, { context: context ?? 'unknown' });
+  useEffect(() => {
+    track(events.paywallViewed, { context: from, ui: RevenueCatUI ? 'revenuecat' : 'fallback' });
+  }, [from, RevenueCatUI]);
+
+  const leave = useCallback(() => {
+    if (left.current) return;
+    left.current = true;
     if (fromOnboarding) router.replace('/(tabs)');
     else router.back();
-  };
+  }, [fromOnboarding, router]);
 
-  const unlock = async () => {
+  const dismiss = useCallback(() => {
+    if (left.current) return;
+    track(events.paywallDismissed, { context: from });
+    leave();
+  }, [from, leave]);
+
+  /** Shared by both paywalls: unlock, celebrate, leave. */
+  const unlocked = useCallback(
+    async (via: 'purchase' | 'restore') => {
+      setPro(true);
+      track(via === 'purchase' ? events.purchaseCompleted : events.purchaseRestored, {
+        context: from,
+      });
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      leave();
+    },
+    [from, leave, setPro],
+  );
+
+  // ── RevenueCat paywall ─────────────────────────────────────────────────────
+  if (RevenueCatUI) {
+    return (
+      <View style={styles.root}>
+        <RevenueCatUI.Paywall
+          style={styles.root}
+          onPurchaseStarted={({ packageBeingPurchased }) =>
+            track(events.purchaseStarted, {
+              context: from,
+              product: packageBeingPurchased.product.identifier,
+            })
+          }
+          // Trust the entitlement, not the transaction: a completed purchase
+          // that did not unlock Pro means the dashboard is misconfigured, and
+          // unlocking anyway would hide that from us.
+          onPurchaseCompleted={({ customerInfo }) => {
+            if (isProActive(customerInfo)) unlocked('purchase');
+            else track(events.purchaseFailed, { context: from, reason: 'not_entitled' });
+          }}
+          onPurchaseCancelled={() => track(events.purchaseCancelled, { context: from })}
+          onPurchaseError={({ error }) =>
+            track(events.purchaseFailed, { context: from, code: error?.code })
+          }
+          onRestoreCompleted={({ customerInfo }) => {
+            if (isProActive(customerInfo)) unlocked('restore');
+          }}
+          onDismiss={dismiss}
+        />
+      </View>
+    );
+  }
+
+  // ── Fallback paywall ───────────────────────────────────────────────────────
+  const buy = async (plan: Plan) => {
     setBusy(true);
-    track(events.purchaseStarted, { context: context ?? 'unknown' });
+    track(events.purchaseStarted, { context: from, product: plan.package.product.identifier });
 
-    const outcome = await purchaseFounder();
+    const outcome = await purchasePlan(plan.package);
     setBusy(false);
 
-    if (outcome === 'purchased') {
-      setFounder(true);
-      track(events.purchaseCompleted);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (fromOnboarding) router.replace('/(tabs)');
-      else router.back();
-      return;
+    switch (outcome.status) {
+      case 'purchased':
+        await unlocked('purchase');
+        return;
+
+      case 'cancelled':
+        track(events.purchaseCancelled, { context: from });
+        return;
+
+      case 'pending':
+        track(events.purchasePending, { context: from });
+        Alert.alert(
+          'Paiement en attente',
+          'Ton achat doit encore être validé. Pro s’activera automatiquement dès que ce sera fait.',
+        );
+        return;
+
+      case 'not_entitled':
+        track(events.purchaseFailed, { context: from, reason: 'not_entitled' });
+        Alert.alert(
+          'Achat enregistré',
+          'Le paiement est passé mais l’accès Pro n’est pas encore actif. Réessaie « Restaurer un achat » dans un instant.',
+        );
+        return;
+
+      case 'unavailable':
+        track(events.purchaseFailed, { context: from, reason: 'unavailable' });
+        Alert.alert(
+          'Achats indisponibles',
+          'Configure RevenueCat et lance un build natif pour activer les achats.',
+        );
+        return;
+
+      default:
+        track(events.purchaseFailed, { context: from, code: outcome.code });
+        Alert.alert('Achat impossible', outcome.message);
     }
-
-    if (outcome === 'cancelled') return;
-
-    track(events.purchaseFailed, { outcome });
-    Alert.alert(
-      outcome === 'unavailable' ? 'Achats indisponibles' : 'Achat impossible',
-      outcome === 'unavailable'
-        ? 'Configure RevenueCat et lance un build natif pour activer les achats.'
-        : 'Quelque chose a échoué. Réessaie dans un instant.',
-    );
   };
 
   const restore = async () => {
+    setBusy(true);
     const restored = await restorePurchases();
+    setBusy(false);
+
     if (restored) {
-      setFounder(true);
-      Alert.alert('Founder restauré', 'Ton accès à vie est de nouveau actif.');
+      await unlocked('restore');
       return;
     }
     Alert.alert('Rien à restaurer', 'Aucun achat trouvé sur ce compte.');
   };
 
-  /** Dev escape hatch so the Founder flow is testable without a native build. */
-  const demoUnlock = () => {
-    setFounder(true);
-    if (fromOnboarding) router.replace('/(tabs)');
-    else router.back();
-  };
-
   return (
-    <View style={[styles.root, { paddingTop: insets.top + spacing.lg }]}>
-      <Pressable onPress={leave} style={styles.close} hitSlop={12}>
-        <Icon name="close" size={20} color={colors.textTertiary} />
-      </Pressable>
-
-      <Animated.View entering={FadeInDown.duration(motion.slow)} style={styles.content}>
-        <Text variant="overline" tone="tertiary" uppercase>
-          Offre Founder
-        </Text>
-
-        <Text variant="display" style={styles.title}>
-          {fromLimit ? 'Tes 10 scans gratuits\nsont utilisés' : 'Débloque CarDex\nà vie'}
-        </Text>
-
-        <Text variant="body" tone="secondary" style={styles.subtitle}>
-          {fromLimit
-            ? `La version gratuite s'arrête à ${FREE_SCAN_LIMIT} scans. Passe Founder pour continuer à collectionner.`
-            : 'Un paiement unique. Aucun abonnement. Tu gardes tout, pour toujours.'}
-        </Text>
-
-        <View style={styles.perks}>
-          {PERKS.map((perk) => (
-            <View key={perk} style={styles.perk}>
-              <Icon name="check" size={16} color={colors.text} strokeWidth={2} />
-              <Text variant="bodyMedium">{perk}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.priceCard}>
-          <View>
-            <Text variant="label" tone="tertiary" uppercase>
-              Accès à vie
-            </Text>
-            <Text variant="title">{price}</Text>
-          </View>
-          <Text variant="caption" tone="tertiary" style={styles.priceNote}>
-            Paiement unique
-          </Text>
-        </View>
-      </Animated.View>
-
-      <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.xl }]}>
-        <Button label="Débloquer" onPress={unlock} loading={busy} size="xl" />
-        <Button label="Continuer gratuitement" variant="ghost" size="md" onPress={leave} />
-
-        <Pressable onPress={restore} hitSlop={8}>
-          <Text variant="caption" tone="tertiary" center>
-            Restaurer un achat
-          </Text>
-        </Pressable>
-
-        {/* Apple requires the terms and privacy policy to be reachable from any
-            screen that sells something. */}
-        {hasLegalLinks ? (
-          <View style={styles.legal}>
-            <Pressable onPress={() => WebBrowser.openBrowserAsync(LEGAL.terms)} hitSlop={8}>
-              <Text variant="caption" tone="tertiary">
-                Conditions
-              </Text>
-            </Pressable>
-            <Text variant="caption" tone="tertiary">
-              ·
-            </Text>
-            <Pressable onPress={() => WebBrowser.openBrowserAsync(LEGAL.privacy)} hitSlop={8}>
-              <Text variant="caption" tone="tertiary">
-                Confidentialité
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        {__DEV__ && !isPurchasesAvailable() ? (
-          <Pressable onPress={demoUnlock} hitSlop={8}>
-            <Text variant="caption" tone="tertiary" center>
-              Dev · débloquer sans RevenueCat
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
+    <ProPaywallFallback
+      fromLimit={fromLimit}
+      busy={busy}
+      onPurchase={buy}
+      onRestore={restore}
+      onClose={dismiss}
+      /** Dev escape hatch so the Pro flow is testable without a native build. */
+      onDemoUnlock={
+        __DEV__ && !isPurchasesAvailable()
+          ? () => {
+              setPro(true);
+              leave();
+            }
+          : undefined
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    paddingHorizontal: gutter,
-  },
-  close: {
-    alignSelf: 'flex-end',
-    padding: spacing.sm,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: spacing.lg,
-  },
-  title: {
-    marginTop: spacing.xs,
-  },
-  subtitle: {
-    maxWidth: 320,
-  },
-  perks: {
-    gap: spacing.md,
-    marginTop: spacing.sm,
-  },
-  perk: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  priceCard: {
-    marginTop: spacing.lg,
-    padding: spacing.lg,
-    borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surface,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  priceNote: {
-    textAlign: 'right',
-  },
-  footer: {
-    gap: spacing.sm,
-  },
-  legal: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
+  root: { flex: 1, backgroundColor: colors.bg },
 });

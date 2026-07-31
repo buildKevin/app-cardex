@@ -13,7 +13,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { initAnalytics } from '../src/services/analytics';
-import { configurePurchases, hasFounderEntitlement } from '../src/services/purchases';
+import {
+  configurePurchases,
+  getCustomerInfo,
+  identifyPurchaser,
+  isProActive,
+  onCustomerInfo,
+} from '../src/services/purchases';
 import { useGameStore } from '../src/store/useGameStore';
 import { colors } from '../src/theme';
 
@@ -27,7 +33,8 @@ export default function RootLayout() {
     Inter_700Bold,
   });
   const hydrated = useGameStore((state) => state.hydrated);
-  const setFounder = useGameStore((state) => state.setFounder);
+  const setPro = useGameStore((state) => state.setPro);
+  const accountId = useGameStore((state) => state.profile.accountId);
   // Insurance against a permanently black splash if AsyncStorage never answers.
   const [storageTimedOut, setStorageTimedOut] = useState(false);
 
@@ -38,11 +45,32 @@ export default function RootLayout() {
 
   useEffect(() => {
     initAnalytics();
-    configurePurchases().then(async () => {
-      // Trust the store over local state — entitlements survive reinstalls.
-      if (await hasFounderEntitlement()) setFounder(true);
+
+    // configurePurchases is synchronous and reports whether it actually ran.
+    if (!configurePurchases()) return;
+
+    // RevenueCat is the source of truth, not the persisted flag: entitlements
+    // survive a reinstall, and a subscription can lapse while the flag says
+    // otherwise. A null answer means "we could not ask" — never a downgrade, or
+    // one failed call would lock a paying player out of the app.
+    getCustomerInfo().then((info) => {
+      if (info) setPro(isProActive(info));
     });
-  }, [setFounder]);
+
+    // RevenueCat pushes fresh info on purchase, restore, renewal and expiry, so
+    // Pro also turns itself off when a subscription ends. Polling would not.
+    return onCustomerInfo((info) => setPro(isProActive(info)));
+  }, [setPro]);
+
+  // Ties purchases to the Supabase user, which is what lets the RevenueCat
+  // webhook flip `is_pro` on the right row — without it the server-side scan
+  // limit keeps blocking a paying customer.
+  useEffect(() => {
+    if (!accountId) return;
+    identifyPurchaser(accountId).then((info) => {
+      if (info) setPro(isProActive(info));
+    });
+  }, [accountId, setPro]);
 
   const ready = fontsLoaded && (hydrated || storageTimedOut);
 

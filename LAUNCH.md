@@ -76,12 +76,44 @@ Le code attend **exactement** ces identifiants (`src/services/purchases.ts`) :
 
 | Élément | Valeur attendue |
 | --- | --- |
-| Produit (non-consommable) | `cardex_founder_lifetime` à 9,99 € |
-| Entitlement | `founder` |
-| Offering | `founder`, avec le package **Lifetime** |
+| Entitlement | `cardex_pro` (nom affiché : CarDex Pro) |
+| Offering | celui marqué **Current** dans le dashboard |
+| Package **Lifetime** | produit `lifetime` — achat unique |
+| Package **Annual** | produit `yearly` — abonnement |
+| Package **Monthly** | produit `monthly` — abonnement |
 
-Il faut créer le produit **dans App Store Connect** d'abord, puis le rattacher dans
+Les trois produits doivent être attachés à l'entitlement `cardex_pro`, sinon l'achat
+passe mais l'app reste bloquée : le code vérifie l'entitlement, jamais la transaction.
+Si l'identifiant de l'entitlement diffère, le corriger via
+`EXPO_PUBLIC_REVENUECAT_ENTITLEMENT` plutôt que dans le code.
+
+Il faut créer les produits **dans App Store Connect** d'abord, puis les rattacher dans
 RevenueCat. Ensuite donne-moi la clé publique iOS (`appl_…`).
+
+**Paywall** : dessiné dans RevenueCat (Paywalls v2), rattaché à l'offering Current.
+Tant qu'aucun paywall n'y est publié, l'app retombe sur le paywall interne
+(`src/components/ProPaywallFallback.tsx`), qui reste fonctionnel mais figé.
+
+**Customer Center** : à activer dans le dashboard (plan Pro ou Enterprise requis).
+C'est lui qui gère annulation, changement de formule et demande de remboursement
+depuis le profil. Sans lui, le bouton ouvre la page de gestion du store.
+
+**Webhook** — obligatoire, pas optionnel. La limite de scans est aussi appliquée dans
+Postgres, sur `users.is_pro`, que le client n'a pas le droit d'écrire. Sans webhook un
+abonné est refusé au 11ᵉ scan :
+
+```bash
+supabase secrets set REVENUECAT_WEBHOOK_SECRET=<chaîne aléatoire longue>
+supabase functions deploy revenuecat-webhook --no-verify-jwt
+```
+
+Puis RevenueCat → Integrations → Webhooks : URL
+`https://<projet>.supabase.co/functions/v1/revenuecat-webhook`, en-tête
+`Authorization` = le même secret.
+
+**Développement** : la clé Test Store (`test_…`) dans `EXPO_PUBLIC_REVENUECAT_TEST_KEY`
+permet d'acheter sans App Store Connect. Elle prime sur les clés de store, donc
+`verify:release` bloque toute build production qui la contient.
 
 ### 2.3 Deux pages web à héberger
 
@@ -146,7 +178,7 @@ Puis dans **App Store Connect** :
 - [ ] **Note pour la review** : indiquer que l'app fonctionne hors compte, et fournir
       un compte de test si tu configures Apple/Google
 
-Passer par **TestFlight** avant de soumettre, et y tester l'achat Founder en sandbox —
+Passer par **TestFlight** avant de soumettre, et y tester l'abonnement CarDex Pro en sandbox —
 c'est le point qui casse le plus souvent en conditions réelles.
 
 ---
@@ -159,7 +191,7 @@ c'est le point qui casse le plus souvent en conditions réelles.
 - Liens Conditions/Confidentialité prêts, câblés sur le paywall et le profil
 - Le mode simulé **ne peut plus partir en production** — `identifyCar` échoue au lieu
   d'inventer une voiture
-- Synchro du garage vers Supabase, photos incluses : un Founder qui réinstalle
+- Synchro du garage vers Supabase, photos incluses : un abonné Pro qui réinstalle
   retrouve sa collection
 - Backend hébergé opérationnel : 25 collections, 125 voitures, 29 badges, les deux
   edge functions déployées, clé OpenAI en secret serveur

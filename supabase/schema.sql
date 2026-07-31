@@ -46,7 +46,7 @@ create index if not exists cars_collection_idx on public.cars (collection_id);
 create table if not exists public.users (
   id          uuid primary key references auth.users (id) on delete cascade,
   username    text not null default 'Collectionneur',
-  is_founder  boolean not null default false,
+  is_pro      boolean not null default false,
   -- Scans that actually matched the catalogue. This is the paywall counter.
   scan_count  integer not null default 0,
   -- Every vision call, matched or not. Only a ceiling against abuse: without
@@ -148,7 +148,7 @@ grant select, insert, delete on public.garage to authenticated;
 grant select, insert, update, delete on public.users, public.garage to service_role;
 
 -- RLS decides which ROWS a user may touch, never which COLUMNS. Without the two
--- statements below, a client could set is_founder = true or scan_count = 0 on
+-- statements below, a client could set is_pro = true or scan_count = 0 on
 -- its own row and walk straight past the paywall. Only service_role (edge
 -- function, RevenueCat webhook) may write those columns.
 revoke update on public.users from anon, authenticated;
@@ -280,24 +280,24 @@ language plpgsql
 security definer set search_path = public
 as $$
 declare
-  v_founder boolean;
+  v_pro     boolean;
   v_count   integer;
   v_calls   integer;
 begin
-  select is_founder, scan_count, vision_calls
-    into v_founder, v_count, v_calls
+  select is_pro, scan_count, vision_calls
+    into v_pro, v_count, v_calls
   from public.users where id = p_user_id for update;
 
   if not found then
     return false;
   end if;
 
-  if not v_founder and v_count >= p_free_limit then
+  if not v_pro and v_count >= p_free_limit then
     return false;
   end if;
 
   -- Bounds the cost of repeated misses without ever troubling an honest player.
-  if not v_founder and v_calls >= p_call_ceiling then
+  if not v_pro and v_calls >= p_call_ceiling then
     return false;
   end if;
 

@@ -9,6 +9,14 @@ export const ENV = {
   visionModel: process.env.EXPO_PUBLIC_VISION_MODEL ?? 'gpt-4o-mini',
   revenueCatIos: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? '',
   revenueCatAndroid: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ?? '',
+  /**
+   * RevenueCat Test Store key (`test_…`). Platform-agnostic and takes priority
+   * over the store keys in dev, so purchases are testable without App Store
+   * Connect or the Play Console. `verify:release` refuses to ship with it.
+   */
+  revenueCatTest: process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY ?? '',
+  /** Entitlement identifier as spelled in the RevenueCat dashboard. */
+  revenueCatEntitlement: process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT ?? 'cardex_pro',
   posthogKey: process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '',
   posthogHost: process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://eu.i.posthog.com',
 } as const;
