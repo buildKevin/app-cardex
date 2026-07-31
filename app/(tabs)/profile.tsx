@@ -1,3 +1,5 @@
+import * as Application from 'expo-application';
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -11,12 +13,33 @@ import { Icon } from '../../src/components/Icon';
 import { ProgressBar } from '../../src/components/ProgressBar';
 import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
+import { SettingsGroup } from '../../src/components/SettingsGroup';
+import { SettingsRow } from '../../src/components/SettingsRow';
 import { Text } from '../../src/components/Text';
 import { badgeStates, unlockedBadgeCount } from '../../src/data/badges';
 import { formatNumber } from '../../src/lib/format';
-import { restorePurchases } from '../../src/services/purchases';
+import { events, resetAnalytics, track } from '../../src/services/analytics';
+import { deleteAccount, signOut } from '../../src/services/auth';
+import { hasSupabase } from '../../src/services/env';
+import { deletePhoto } from '../../src/services/photo';
+import { FOUNDER_FALLBACK_PRICE, restorePurchases } from '../../src/services/purchases';
+import { visionMode } from '../../src/services/vision';
 import { SHOWCASE_SIZE, useGameStore, useStats } from '../../src/store/useGameStore';
 import { colors, fonts, gridItemWidth, gutter, radii, spacing, type } from '../../src/theme';
+
+type Busy = 'restore' | 'signout' | 'delete' | null;
+
+const PROVIDER_LABEL: Record<string, string> = {
+  apple: 'Apple',
+  google: 'Google',
+  local: 'Cet appareil uniquement',
+};
+
+const VISION_LABEL: Record<string, string> = {
+  mock: 'simulée',
+  supabase: 'serveur',
+  openai: 'directe (dev)',
+};
 
 export default function Profile() {
   const router = useRouter();
@@ -28,9 +51,12 @@ export default function Profile() {
   const setFounder = useGameStore((state) => state.setFounder);
   const showcase = useGameStore((state) => state.showcase);
   const garage = useGameStore((state) => state.garage);
+  const resetGarage = useGameStore((state) => state.resetGarage);
+  const signOutLocal = useGameStore((state) => state.signOutLocal);
   const reset = useGameStore((state) => state.reset);
 
   const [draftName, setDraftName] = useState(profile.username);
+  const [busy, setBusy] = useState<Busy>(null);
 
   const badges = badgeStates(stats);
   const unlocked = unlockedBadgeCount(stats);
@@ -38,20 +64,102 @@ export default function Profile() {
     .map((id) => garage.find((entry) => entry.id === id))
     .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
+  const version = Constants.expoConfig?.version ?? '1.0.0';
+  const build = Application.nativeBuildVersion;
+
+  /** Photos live on disk, outside the store, so they need removing by hand. */
+  const purgePhotos = () => garage.forEach((entry) => deletePhoto(entry.photoUri));
+
   const onRestore = async () => {
+    setBusy('restore');
     const restored = await restorePurchases();
+    setBusy(null);
+
     if (restored) {
       setFounder(true);
       Alert.alert('Founder restauré', 'Ton accès à vie est de nouveau actif.');
       return;
     }
-    Alert.alert('Rien à restaurer', 'Aucun achat trouvé sur ce compte.');
+    Alert.alert(
+      'Aucun achat trouvé',
+      'Vérifie que tu es bien connecté avec le compte qui a servi à l’achat.',
+    );
   };
 
-  const onReset = () => {
-    Alert.alert('Réinitialiser ?', 'Ton garage, tes XP et tes badges seront effacés.', [
+  const onResetGarage = () => {
+    Alert.alert(
+      'Vider le garage ?',
+      'Tes voitures, tes XP et tes badges seront effacés. Ton compte est conservé.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Vider',
+          style: 'destructive',
+          onPress: () => {
+            purgePhotos();
+            resetGarage();
+          },
+        },
+      ],
+    );
+  };
+
+  const onSignOut = () => {
+    Alert.alert('Se déconnecter ?', 'Ton garage reste sur cet appareil.', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Réinitialiser', style: 'destructive', onPress: reset },
+      {
+        text: 'Se déconnecter',
+        onPress: async () => {
+          setBusy('signout');
+          await signOut();
+          track(events.signedOut);
+          resetAnalytics();
+          signOutLocal();
+          setBusy(null);
+          router.replace('/onboarding');
+        },
+      },
+    ]);
+  };
+
+  // Two steps on purpose: Apple wants deletion easy to find, not easy to hit.
+  const onDeleteAccount = () => {
+    Alert.alert(
+      'Supprimer mon compte ?',
+      'Ton compte, ton garage, tes XP et tes badges seront définitivement supprimés.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Continuer', style: 'destructive', onPress: confirmDeleteAccount },
+      ],
+    );
+  };
+
+  const confirmDeleteAccount = () => {
+    Alert.alert('Dernière confirmation', 'Cette action est irréversible.', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer définitivement',
+        style: 'destructive',
+        onPress: async () => {
+          setBusy('delete');
+          const outcome = await deleteAccount();
+          setBusy(null);
+
+          if (outcome === 'error') {
+            Alert.alert(
+              'Suppression impossible',
+              'Ton compte n’a pas pu être supprimé. Réessaie dans un instant.',
+            );
+            return;
+          }
+
+          track(events.accountDeleted, { remote: outcome === 'deleted' });
+          purgePhotos();
+          resetAnalytics();
+          reset();
+          router.replace('/onboarding');
+        },
+      },
     ]);
   };
 
@@ -91,7 +199,12 @@ export default function Profile() {
         ) : null}
 
         <View style={styles.levelBar}>
-          <ProgressBar ratio={stats.progress.ratio} />
+          <ProgressBar ratio={stats.progress.ratio} height={2} />
+          <Text variant="caption" tone="tertiary">
+            {stats.progress.xpToNext > 0
+              ? `${formatNumber(stats.progress.xpToNext)} XP avant le niveau ${stats.progress.level + 1}`
+              : 'Niveau maximum atteint'}
+          </Text>
         </View>
 
         <View style={styles.counters}>
@@ -121,11 +234,7 @@ export default function Profile() {
             }
 
             return (
-              <Pressable
-                key={entry.id}
-                style={styles.slot}
-                onPress={() => router.push(`/car/${entry.id}`)}
-              >
+              <Pressable key={entry.id} style={styles.slot} onPress={() => router.push(`/car/${entry.id}`)}>
                 {entry.photoUri ? (
                   <Image source={{ uri: entry.photoUri }} style={styles.slotImage} contentFit="cover" />
                 ) : (
@@ -161,24 +270,79 @@ export default function Profile() {
         </View>
       </View>
 
-      <View style={styles.footerActions}>
+      <SettingsGroup title="Compte">
+        <SettingsRow
+          label="Connexion"
+          value={profile.provider ? PROVIDER_LABEL[profile.provider] : 'Aucune'}
+        />
+        <SettingsRow
+          label="Identifiant"
+          value={profile.email ?? (profile.accountId ? 'Sans e-mail' : '—')}
+        />
+        <SettingsRow
+          label="Statut"
+          value={isFounder ? undefined : 'Gratuit'}
+          badge={isFounder ? 'Founder' : undefined}
+          last
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="Achats">
         {!isFounder ? (
-          <Pressable onPress={() => router.push('/paywall?context=profile')} hitSlop={8}>
-            <Text variant="label">Passer Founder</Text>
-          </Pressable>
+          <SettingsRow
+            label="Passer Founder"
+            value={`${FOUNDER_FALLBACK_PRICE} à vie`}
+            onPress={() => router.push('/paywall?context=profile')}
+            disabled={busy !== null}
+          />
         ) : null}
+        <SettingsRow
+          label="Restaurer un achat"
+          onPress={onRestore}
+          loading={busy === 'restore'}
+          disabled={busy !== null && busy !== 'restore'}
+          last
+        />
+      </SettingsGroup>
 
-        <Pressable onPress={onRestore} hitSlop={8}>
-          <Text variant="label" tone="secondary">
-            Restaurer un achat
-          </Text>
-        </Pressable>
+      <SettingsGroup
+        title="Données et compte"
+        footnote="La suppression du compte efface aussi tes photos, et ne peut pas être annulée."
+      >
+        <SettingsRow
+          label="Vider mon garage"
+          hint="Garde le compte, efface les voitures"
+          onPress={onResetGarage}
+          destructive
+          disabled={busy !== null}
+        />
+        <SettingsRow
+          label="Se déconnecter"
+          hint="Le garage reste sur cet appareil"
+          onPress={onSignOut}
+          loading={busy === 'signout'}
+          disabled={busy !== null && busy !== 'signout'}
+        />
+        <SettingsRow
+          label="Supprimer mon compte"
+          hint="Compte, garage et photos, définitivement"
+          onPress={onDeleteAccount}
+          loading={busy === 'delete'}
+          disabled={busy !== null && busy !== 'delete'}
+          destructive
+          last
+        />
+      </SettingsGroup>
 
-        <Pressable onPress={onReset} hitSlop={8}>
-          <Text variant="label" color={colors.danger}>
-            Réinitialiser mes données
-          </Text>
-        </Pressable>
+      <View style={styles.footer}>
+        <Text variant="caption" tone="tertiary">
+          CarDex {version}
+          {build ? ` (${build})` : ''}
+        </Text>
+        <Text variant="caption" tone="tertiary">
+          {hasSupabase ? 'Serveur connecté' : 'Hors ligne'} · identification{' '}
+          {VISION_LABEL[visionMode] ?? visionMode}
+        </Text>
       </View>
     </Screen>
   );
@@ -228,6 +392,7 @@ const styles = StyleSheet.create({
   },
   levelBar: {
     marginTop: spacing.xl,
+    gap: spacing.sm,
   },
   counters: {
     flexDirection: 'row',
@@ -286,9 +451,9 @@ const styles = StyleSheet.create({
   badgeCell: {
     width: gridItemWidth(2),
   },
-  footerActions: {
-    marginTop: spacing.xxxl,
-    gap: spacing.lg,
+  footer: {
+    marginTop: spacing.xxl,
+    gap: spacing.xs,
     paddingBottom: gutter,
   },
 });

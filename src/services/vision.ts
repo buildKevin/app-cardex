@@ -73,6 +73,16 @@ async function identifyViaSupabase(base64: string): Promise<VisionResult> {
     // The edge function owns the free-tier gate, so 402 means "show the paywall".
     const status = (error as { context?: { status?: number } }).context?.status;
     if (status === 402) throw new VisionError('limit', error.message);
+
+    // A local stack usually has no OPENAI_API_KEY. Rather than make the whole
+    // loop untestable against local Supabase, fall back to the mock — but only
+    // in development, so a misconfigured production build fails loudly instead
+    // of quietly inventing cars.
+    if (status === 503 && __DEV__) {
+      console.warn('[vision] edge function has no model configured — using the mock (dev only)');
+      return identifyMocked();
+    }
+
     throw new VisionError('network', error.message);
   }
 

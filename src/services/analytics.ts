@@ -33,6 +33,8 @@ export const events = {
   onboardingStarted: 'onboarding_started',
   onboardingCompleted: 'onboarding_completed',
   signedIn: 'signed_in',
+  signedOut: 'signed_out',
+  accountDeleted: 'account_deleted',
   paywallViewed: 'paywall_viewed',
   paywallDismissed: 'paywall_dismissed',
   purchaseStarted: 'purchase_started',

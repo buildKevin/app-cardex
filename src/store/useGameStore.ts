@@ -17,6 +17,8 @@ interface Profile {
   username: string;
   accountId: string | null;
   email: string | null;
+  /** How the account was created, shown in the profile. */
+  provider: 'apple' | 'google' | 'local' | null;
 }
 
 interface GameState {
@@ -32,16 +34,25 @@ interface GameState {
 
   completeOnboarding: () => void;
   setFounder: (value: boolean) => void;
-  setAccount: (accountId: string | null, email: string | null) => void;
+  setAccount: (accountId: string | null, email: string | null, provider: Profile['provider']) => void;
   setUsername: (username: string) => void;
   consumeScan: () => void;
   addScan: (result: VisionResult, photoUri: string | null) => GarageEntry;
   toggleShowcase: (entryId: string) => void;
   removeEntry: (entryId: string) => void;
+  /** Drops the session and returns to onboarding, keeping the local garage. */
+  signOutLocal: () => void;
+  /** Empties the garage and the scan counter, keeping the account. */
+  resetGarage: () => void;
   reset: () => void;
 }
 
-const initialProfile: Profile = { username: 'Collectionneur', accountId: null, email: null };
+const initialProfile: Profile = {
+  username: 'Collectionneur',
+  accountId: null,
+  email: null,
+  provider: null,
+};
 
 export const useGameStore = create<GameState>()(
   persist(
@@ -58,8 +69,8 @@ export const useGameStore = create<GameState>()(
 
       setFounder: (value) => set({ isFounder: value }),
 
-      setAccount: (accountId, email) =>
-        set((state) => ({ profile: { ...state.profile, accountId, email } })),
+      setAccount: (accountId, email, provider) =>
+        set((state) => ({ profile: { ...state.profile, accountId, email, provider } })),
 
       setUsername: (username) =>
         set((state) => ({ profile: { ...state.profile, username: username.trim() || 'Collectionneur' } })),
@@ -105,6 +116,14 @@ export const useGameStore = create<GameState>()(
           showcase: state.showcase.filter((id) => id !== entryId),
         })),
 
+      resetGarage: () => set({ garage: [], showcase: [], scanCount: 0 }),
+
+      signOutLocal: () =>
+        set((state) => ({
+          onboarded: false,
+          profile: { ...initialProfile, username: state.profile.username },
+        })),
+
       reset: () =>
         set({
           onboarded: false,
@@ -117,7 +136,27 @@ export const useGameStore = create<GameState>()(
     }),
     {
       name: 'cardex-v1',
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
+      /**
+       * State written by an older build is missing fields added since. Without a
+       * migration the profile showed "Connexion : Aucune" next to a real
+       * account id, which is the kind of small lie that erodes trust in an
+       * account screen.
+       */
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<GameState> | undefined;
+        if (!state) return persisted as GameState;
+
+        if (version < 2 && state.profile && state.profile.provider === undefined) {
+          state.profile = {
+            ...state.profile,
+            provider: state.profile.accountId ? 'local' : null,
+          };
+        }
+
+        return state as GameState;
+      },
       // Explicit allow-list: `hydrated` is runtime-only, and listing the data
       // keys keeps new actions from ever landing in storage.
       partialize: (state) => ({

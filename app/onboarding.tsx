@@ -75,7 +75,7 @@ export default function Onboarding() {
     setPending(provider);
     try {
       const account = await signIn(provider);
-      setAccount(account.id, account.email);
+      setAccount(account.id, account.email, account.provider);
       identify(account.id, { provider: account.provider });
       track(events.signedIn, { provider: account.provider });
       completeOnboarding();
