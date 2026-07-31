@@ -51,7 +51,7 @@ interface Props {
   onDemoUnlock?: () => void;
 }
 
-export function ProPaywallFallback({
+export function ProPaywall({
   fromLimit,
   busy,
   onPurchase,

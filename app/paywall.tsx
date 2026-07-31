@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 
-import { ProPaywallFallback } from '../src/components/ProPaywallFallback';
+import { ProPaywall } from '../src/components/ProPaywall';
 import { events, track } from '../src/services/analytics';
 import {
   getPurchasesUi,
@@ -44,10 +44,14 @@ export default function Paywall() {
   const fromOnboarding = context === 'onboarding';
 
   const RevenueCatUI = getPurchasesUi();
+  const useRevenueCatUi = process.env.EXPO_PUBLIC_USE_REVENUECAT_UI === '1';
 
   useEffect(() => {
-    track(events.paywallViewed, { context: from, ui: RevenueCatUI ? 'revenuecat' : 'fallback' });
-  }, [from, RevenueCatUI]);
+    track(events.paywallViewed, {
+      context: from,
+      ui: RevenueCatUI && useRevenueCatUi ? 'revenuecat' : 'custom',
+    });
+  }, [from, RevenueCatUI, useRevenueCatUi]);
 
   const leave = useCallback(() => {
     if (left.current) return;
@@ -75,8 +79,17 @@ export default function Paywall() {
     [from, leave, setPro],
   );
 
-  // ── RevenueCat paywall ─────────────────────────────────────────────────────
-  if (RevenueCatUI) {
+  /**
+   * RevenueCat's own paywall, used only when explicitly opted into.
+   *
+   * It was the default, which broke the moment the UI package shipped in a real
+   * build: with no paywall configured in the dashboard it renders "There's no
+   * paywall configured" to the user. Beyond that, its templates cannot deliver
+   * the design this app is built around — pure black, near-zero colour, our own
+   * typography. Our screen below is the product; this stays for the day someone
+   * builds a paywall in the dashboard and sets EXPO_PUBLIC_USE_REVENUECAT_UI.
+   */
+  if (RevenueCatUI && useRevenueCatUi) {
     return (
       <View style={styles.root}>
         <RevenueCatUI.Paywall
@@ -167,7 +180,7 @@ export default function Paywall() {
   };
 
   return (
-    <ProPaywallFallback
+    <ProPaywall
       fromLimit={fromLimit}
       busy={busy}
       onPurchase={buy}
