@@ -3,82 +3,91 @@ import { StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { Button } from '../../src/components/Button';
-import { Card } from '../../src/components/Card';
 import { CarTile } from '../../src/components/CarTile';
 import { EmptyState } from '../../src/components/EmptyState';
 import { ProgressBar } from '../../src/components/ProgressBar';
+import { RarityBreakdown } from '../../src/components/RarityBreakdown';
 import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
-import { StatBlock } from '../../src/components/StatBlock';
 import { Text } from '../../src/components/Text';
 import { formatNumber } from '../../src/lib/format';
-import { useGameStore, useScansLeft, useStats } from '../../src/store/useGameStore';
+import { useGameStore, useStats } from '../../src/store/useGameStore';
 import { gridItemWidth, motion, spacing } from '../../src/theme';
 
 export default function Garage() {
   const router = useRouter();
   const garage = useGameStore((state) => state.garage);
-  const isFounder = useGameStore((state) => state.isFounder);
   const stats = useStats();
-  const left = useScansLeft();
 
-  const { level, current, span, xpToNext } = stats.progress;
+  const { level, xpToNext, ratio } = stats.progress;
+  const hasCars = stats.cars > 0;
 
   return (
     <Screen scroll>
-      <Text variant="display">Garage</Text>
+      <Text variant="overline" tone="tertiary" uppercase>
+        Garage
+      </Text>
 
-      <Card style={styles.statCard}>
-        <View style={styles.statRow}>
-          <StatBlock label="Voitures" value={formatNumber(stats.cars)} />
-          <StatBlock label="Niveau" value={String(level)} />
-          <StatBlock label="XP" value={formatNumber(stats.xp)} />
+      {/* One focal figure; everything else is a supporting line. */}
+      <View style={styles.hero}>
+        <Text variant="hero">{formatNumber(stats.cars)}</Text>
+        <Text variant="body" tone="secondary">
+          {stats.cars === 1 ? 'voiture collectionnée' : 'voitures collectionnées'}
+        </Text>
+      </View>
+
+      <View style={styles.level}>
+        <View style={styles.levelRow}>
+          <Text variant="bodyMedium">Niveau {level}</Text>
+          <Text variant="bodyMedium" tone="secondary">
+            {formatNumber(stats.xp)} XP
+          </Text>
         </View>
 
-        <View style={styles.progress}>
-          <ProgressBar ratio={stats.progress.ratio} />
-          <View style={styles.progressLabels}>
-            <Text variant="caption" tone="tertiary">
-              {formatNumber(current)} / {formatNumber(span)} XP
-            </Text>
-            <Text variant="caption" tone="tertiary">
-              {xpToNext > 0 ? `${formatNumber(xpToNext)} XP → niveau ${level + 1}` : 'Niveau max atteint'}
-            </Text>
-          </View>
-        </View>
-      </Card>
+        <ProgressBar ratio={ratio} height={2} />
 
+        <Text variant="caption" tone="tertiary">
+          {xpToNext > 0
+            ? `${formatNumber(xpToNext)} XP avant le niveau ${level + 1}`
+            : 'Niveau maximum atteint'}
+        </Text>
+      </View>
+
+      {hasCars ? (
+        <View style={styles.rarity}>
+          <RarityBreakdown counts={stats.rarityCounts} />
+        </View>
+      ) : null}
+
+      {/* No scan counter here on purpose — a countdown reads as a warning. */}
       <Button
         label="Scanner une voiture"
         size="xl"
         onPress={() => router.push('/(tabs)/scan')}
-        caption={isFounder ? 'Scans illimités' : `${left} scan${left > 1 ? 's' : ''} restant${left > 1 ? 's' : ''}`}
         style={styles.cta}
       />
 
       <View style={styles.section}>
-        <SectionHeader
-          title="Dernières découvertes"
-          trailing={stats.cars > 0 ? formatNumber(stats.cars) : undefined}
-        />
-
-        {garage.length === 0 ? (
+        {hasCars ? (
+          <>
+            <SectionHeader title="Dernières découvertes" trailing={formatNumber(stats.cars)} />
+            <View style={styles.grid}>
+              {garage.map((entry, index) => (
+                <Animated.View
+                  key={entry.id}
+                  entering={FadeIn.delay(Math.min(index, 8) * 40).duration(motion.base)}
+                  style={styles.cell}
+                >
+                  <CarTile entry={entry} onPress={() => router.push(`/car/${entry.id}`)} />
+                </Animated.View>
+              ))}
+            </View>
+          </>
+        ) : (
           <EmptyState
             title="Ton garage est vide"
             subtitle="Trouve une voiture dans la rue et scanne-la pour ouvrir ta première carte."
           />
-        ) : (
-          <View style={styles.grid}>
-            {garage.map((entry, index) => (
-              <Animated.View
-                key={entry.id}
-                entering={FadeIn.delay(Math.min(index, 8) * 40).duration(motion.base)}
-                style={styles.cell}
-              >
-                <CarTile entry={entry} onPress={() => router.push(`/car/${entry.id}`)} />
-              </Animated.View>
-            ))}
-          </View>
         )}
       </View>
     </Screen>
@@ -86,23 +95,24 @@ export default function Garage() {
 }
 
 const styles = StyleSheet.create({
-  statCard: {
-    marginTop: spacing.xl,
+  hero: {
+    marginTop: spacing.lg,
+    gap: spacing.xs,
   },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  progress: {
-    marginTop: spacing.xl,
+  level: {
+    marginTop: spacing.xxl,
     gap: spacing.sm,
   },
-  progressLabels: {
+  levelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  rarity: {
+    marginTop: spacing.xl,
   },
   cta: {
-    marginTop: spacing.lg,
+    marginTop: spacing.xxl,
   },
   section: {
     marginTop: spacing.xxl,

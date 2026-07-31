@@ -81,6 +81,8 @@ export const type = {
   overline: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, letterSpacing: 0.8 },
   /** Big numbers in stat blocks. */
   metric: { fontFamily: fonts.semibold, fontSize: 26, lineHeight: 30, letterSpacing: -0.9 },
+  /** The single focal figure of a screen. Tracking is tight on purpose. */
+  hero: { fontFamily: fonts.bold, fontSize: 60, lineHeight: 62, letterSpacing: -3 },
 } as const;
 
 /** Discreet, fluid — never bouncy. */

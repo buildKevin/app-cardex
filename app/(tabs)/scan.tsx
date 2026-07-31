@@ -146,13 +146,7 @@ export default function Scan() {
       ) : null}
 
       <View style={styles.overlay} pointerEvents="box-none">
-        <View style={[styles.top, { paddingTop: insets.top + spacing.md }]}>
-          <View style={styles.pill}>
-            <Text variant="label" tone="secondary">
-              {isFounder ? 'Founder · illimité' : `${left} scan${left > 1 ? 's' : ''} restant${left > 1 ? 's' : ''}`}
-            </Text>
-          </View>
-        </View>
+        <View style={[styles.top, { paddingTop: insets.top + spacing.md }]} />
 
         <View style={styles.frame}>
           <View style={[styles.corner, styles.tl]} />
@@ -217,14 +211,6 @@ const styles = StyleSheet.create({
   },
   top: {
     alignItems: 'center',
-  },
-  pill: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.pill,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   frame: {
     position: 'absolute',
