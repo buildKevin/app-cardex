@@ -76,44 +76,30 @@ Le code attend **exactement** ces identifiants (`src/services/purchases.ts`) :
 
 | Élément | Valeur attendue |
 | --- | --- |
-| Entitlement | `cardex_pro` (nom affiché : CarDex Pro) |
-| Offering | celui marqué **Current** dans le dashboard |
-| Package **Lifetime** | produit `lifetime` — achat unique |
-| Package **Annual** | produit `yearly` — abonnement |
-| Package **Monthly** | produit `monthly` — abonnement |
+| Entitlement | `cardex_pro` (surchargeable par `EXPO_PUBLIC_REVENUECAT_ENTITLEMENT`) |
+| Offering | celui marqué **current**, sinon `default` |
+| Produits | `lifetime`, `yearly`, `monthly` |
 
-Les trois produits doivent être attachés à l'entitlement `cardex_pro`, sinon l'achat
-passe mais l'app reste bloquée : le code vérifie l'entitlement, jamais la transaction.
-Si l'identifiant de l'entitlement diffère, le corriger via
-`EXPO_PUBLIC_REVENUECAT_ENTITLEMENT` plutôt que dans le code.
+Il faut créer les produits **dans App Store Connect** d'abord, puis les rattacher
+dans RevenueCat. Ensuite donne-moi la clé publique iOS (`appl_…`) pour `eas.json`.
 
-Il faut créer les produits **dans App Store Connect** d'abord, puis les rattacher dans
-RevenueCat. Ensuite donne-moi la clé publique iOS (`appl_…`).
+**Webhook — déjà déployé et testé.** Il maintient `users.is_pro` à jour, ce dont
+`begin_scan()` a besoin : sans lui, un abonné payant serait quand même refusé au
+11ᵉ scan. Dans RevenueCat → Integrations → Webhooks :
 
-**Paywall** : dessiné dans RevenueCat (Paywalls v2), rattaché à l'offering Current.
-Tant qu'aucun paywall n'y est publié, l'app retombe sur le paywall interne
-(`src/components/ProPaywallFallback.tsx`), qui reste fonctionnel mais figé.
+| Champ | Valeur |
+| --- | --- |
+| URL | `https://ykqdkadtdsdxujgqnbmp.supabase.co/functions/v1/revenuecat-webhook` |
+| Authorization | le secret fourni en fin de session (**valeur brute, sans `Bearer`**) |
 
-**Customer Center** : à activer dans le dashboard (plan Pro ou Enterprise requis).
-C'est lui qui gère annulation, changement de formule et demande de remboursement
-depuis le profil. Sans lui, le bouton ouvre la page de gestion du store.
+Vérifié en conditions réelles : `INITIAL_PURCHASE` passe `is_pro` à `true`,
+`EXPIRATION` le repasse à `false`, et un appel sans secret ou avec un mauvais
+secret est refusé en 401.
 
-**Webhook** — obligatoire, pas optionnel. La limite de scans est aussi appliquée dans
-Postgres, sur `users.is_pro`, que le client n'a pas le droit d'écrire. Sans webhook un
-abonné est refusé au 11ᵉ scan :
-
-```bash
-supabase secrets set REVENUECAT_WEBHOOK_SECRET=<chaîne aléatoire longue>
-supabase functions deploy revenuecat-webhook --no-verify-jwt
-```
-
-Puis RevenueCat → Integrations → Webhooks : URL
-`https://<projet>.supabase.co/functions/v1/revenuecat-webhook`, en-tête
-`Authorization` = le même secret.
-
-**Développement** : la clé Test Store (`test_…`) dans `EXPO_PUBLIC_REVENUECAT_TEST_KEY`
-permet d'acheter sans App Store Connect. Elle prime sur les clés de store, donc
-`verify:release` bloque toute build production qui la contient.
+**Pour tester les achats sans App Store Connect**, RevenueCat fournit une clé
+Test Store (`test_…`) à mettre dans `EXPO_PUBLIC_REVENUECAT_TEST_KEY`. Elle prend
+le pas sur les clés de store, et `verify:release` refuse de builder la production
+avec elle.
 
 ### 2.3 Deux pages web à héberger
 
