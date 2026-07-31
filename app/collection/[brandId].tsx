@@ -2,6 +2,7 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { BrandLogo } from '../../src/components/BrandLogo';
 import { Card } from '../../src/components/Card';
 import { CarSilhouette } from '../../src/components/CarSilhouette';
 import { Icon } from '../../src/components/Icon';
@@ -50,10 +51,15 @@ export default function BrandCollection() {
         </Text>
       </Pressable>
 
-      <Text variant="display">{brand.name}</Text>
-      <Text variant="body" tone="secondary" style={styles.country}>
-        {brand.country}
-      </Text>
+      <View style={styles.identity}>
+        <BrandLogo brandId={brand.id} name={brand.name} size={56} />
+        <View style={styles.identityText}>
+          <Text variant="display">{brand.name}</Text>
+          <Text variant="body" tone="secondary" style={styles.country}>
+            {brand.country}
+          </Text>
+        </View>
+      </View>
 
       <Card style={styles.summary}>
         <View style={styles.summaryHead}>
@@ -142,6 +148,14 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     transform: [{ rotate: '180deg' }],
+  },
+  identity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  identityText: {
+    flexShrink: 1,
   },
   country: {
     marginTop: spacing.xs,

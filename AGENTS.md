@@ -44,5 +44,11 @@ Things that already bit us on SDK 57 / RN 0.86:
 - **Brand matching scores by longest matching alias, never array order.** Order
   dependence was a real bug: "lamborghini" contains "mb".
 - After editing `src/data/`, run `node scripts/generate-seed.mjs`.
+- **Brand logos come from Simple Icons**, inlined as single 24x24 SVG paths in
+  `src/data/brandLogos.ts` — generated, never hand-edited. After adding a brand,
+  run `node scripts/fetch-brand-logos.mjs`. Three brands have no upstream icon
+  (Mercedes-Benz, Alfa Romeo, Land Rover); `<BrandLogo>` draws a monogram for
+  those, so a missing entry is a supported state, not a bug. Render marks
+  monochrome from `colors` — the brand hex would fight the black canvas.
 - iOS native builds on this machine need a UTF-8 locale:
   `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx expo run:ios`.

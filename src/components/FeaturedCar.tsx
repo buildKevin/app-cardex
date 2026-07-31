@@ -7,6 +7,7 @@ import type { GarageEntry } from '../data/types';
 import { formatPower } from '../lib/format';
 import { rarityColor } from '../lib/rarity';
 import { colors, motion, radii, spacing } from '../theme';
+import { BrandLogo } from './BrandLogo';
 import { CarSilhouette } from './CarSilhouette';
 import { RarityTag } from './RarityTag';
 import { Scrim } from './Scrim';
@@ -52,9 +53,20 @@ export function FeaturedCar({ entry, onPress }: FeaturedCarProps) {
           <Scrim />
 
           <View style={styles.caption}>
-            <Text variant="overline" tone="secondary" uppercase>
-              {entry.make}
-            </Text>
+            <View style={styles.brand}>
+              {/* No monogram here: the make is spelled out right beside it. */}
+              <BrandLogo
+                brandId={entry.brandId}
+                name={entry.make}
+                size={14}
+                framed={false}
+                color={colors.textSecondary}
+                fallback="none"
+              />
+              <Text variant="overline" tone="secondary" uppercase>
+                {entry.make}
+              </Text>
+            </View>
             <Text variant="title" numberOfLines={1}>
               {entry.model}
             </Text>
@@ -101,6 +113,11 @@ const styles = StyleSheet.create({
     right: spacing.lg,
     bottom: spacing.lg,
     gap: 2,
+  },
+  brand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
   },
   footer: {
     flexDirection: 'row',
