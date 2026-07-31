@@ -51,7 +51,7 @@ Dashboard → Authentication → Providers, sur le projet `ykqdkadtdsdxujgqnbmp`
 **Apple — 30 secondes, faisable tout de suite.** Comme on utilise le flux **natif**
 (`signInWithIdToken`), un seul champ est nécessaire :
 
-> **Client IDs** = `com.cardex.app`
+> **Client IDs** = `com.buildkevin.cardex`
 
 Pas de Team ID, pas de Services ID, pas de clé `.p8` : ceux-là ne servent qu'au flux
 web/OAuth, qu'on n'utilise plus pour Apple. La doc Supabase le dit explicitement —

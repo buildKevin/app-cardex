@@ -18,7 +18,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.cardex.app",
+      "bundleIdentifier": "com.buildkevin.cardex",
       "infoPlist": {
         "NSCameraUsageDescription": "CarDex utilise l'appareil photo pour identifier les voitures que tu scannes.",
         "ITSAppUsesNonExemptEncryption": false
@@ -27,7 +27,7 @@
       "usesAppleSignIn": true
     },
     "android": {
-      "package": "com.cardex.app",
+      "package": "com.buildkevin.cardex",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
