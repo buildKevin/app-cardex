@@ -1,0 +1,53 @@
+export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
+
+export interface Brand {
+  id: string;
+  name: string;
+  country: string;
+  /** Lowercase spellings the vision model might return. */
+  aliases: string[];
+}
+
+export interface Car {
+  id: string;
+  brandId: string;
+  model: string;
+  generation: string;
+  yearFrom: number;
+  /** null = still produced. */
+  yearTo: number | null;
+  /** Horsepower of the reference version. */
+  power: number;
+  country: string;
+  /** Approximate new price in EUR. */
+  priceNew: number;
+  rarity: Rarity;
+  /** Lowercase spellings the vision model might return. */
+  aliases: string[];
+}
+
+/** One car sitting in the user's garage. */
+export interface GarageEntry {
+  id: string;
+  /** null when the vision model found something not in our catalogue. */
+  carId: string | null;
+  brandId: string | null;
+  make: string;
+  model: string;
+  year: number | null;
+  rarity: Rarity;
+  /** Local uri of the photo the user took. */
+  photoUri: string | null;
+  discoveredAt: string;
+  xp: number;
+  confidence: number;
+}
+
+/** What the vision model is allowed to return — nothing more. */
+export interface VisionResult {
+  make: string;
+  model: string;
+  generation: string | null;
+  year: number | null;
+  confidence: number;
+}
