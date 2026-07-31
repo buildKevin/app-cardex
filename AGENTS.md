@@ -65,3 +65,11 @@ Things that already bit us on SDK 57 / RN 0.86:
   monochrome from `colors` — the brand hex would fight the black canvas.
 - iOS native builds on this machine need a UTF-8 locale:
   `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 npx expo run:ios`.
+- **Never run `eas build` without `--local`.** Cloud builds are billed and the
+  account has no credits left. Store and TestFlight builds go through
+  `./scripts/build-ios-production.sh`, which is local and free. Two things that
+  follow from `--local`: the binary is never registered on EAS servers, so
+  `eas submit --latest` finds nothing and needs `--path <archive>` instead; and the
+  first build of a new distribution type must run **interactively**, because
+  eas-cli's non-interactive `SetUpDistributionCertificate` is a stub that only
+  throws. So never launch a first build in the background.

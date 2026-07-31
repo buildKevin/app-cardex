@@ -185,14 +185,61 @@ press, un halo radial au reveal — jamais de rebond, jamais d'effet « gaming �
 Les tokens sont dans `src/theme/index.ts`. Aucune valeur brute ne devrait
 apparaître dans un écran.
 
+## Builds & distribution
+
+**On ne build jamais avec EAS dans le cloud — c'est payant.** Tous les builds se
+font en local avec `--local`, ce qui ne consomme aucun crédit Expo. Le compte n'en
+a plus, et une commande `eas build` sans `--local` part sur les serveurs d'Expo et
+facture.
+
+```bash
+./scripts/build-ios-production.sh --submit
+```
+
+C'est la seule commande à connaître pour TestFlight et l'App Store. Elle charge la
+clé App Store Connect depuis `.env.asc` (donc aucun mot de passe Apple à saisir),
+force le locale UTF-8 que CocoaPods exige sur cette machine, joue
+`npm run verify:release`, build en local, puis upload. Sans `--submit`, elle build
+seulement.
+
+Deux pièges qui nous sont déjà tombés dessus :
+
+- **`eas submit --latest` ne marche pas** après un build `--local` : le binaire
+  n'est jamais enregistré sur les serveurs EAS — c'est précisément ce qui le rend
+  gratuit — donc `--latest` ne trouve rien. Il faut `--path <archive>`, ce que le
+  script fait en prenant la dernière `build-*.ipa` de la racine.
+- **La création du certificat de distribution exige le mode interactif.** Dans
+  eas-cli, `credentials/ios/actions/SetUpDistributionCertificate.js` a un chemin
+  non-interactif qui est un stub (`// TODO: implement validation`) : il ne crée
+  jamais rien et lève `MissingCredentialsNonInteractiveError`. Aucune variable
+  d'environnement ne contourne ça. Donc pas de `--non-interactive` sur un premier
+  build, et pas de build lancé en tâche de fond.
+
+Si la signature échoue sur « No code signing certificates are available » ou
+« Distribution certificate hasn't been imported successfully », la cause est
+probablement le certificat intermédiaire d'Apple : macOS peut n'avoir que le
+**WWDR G1, expiré depuis le 07/02/2023**. Le G3 se réinstalle en deux commandes,
+il est public :
+
+```bash
+curl -O https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer && security import AppleWWDRCAG3.cer -k ~/Library/Keychains/login.keychain-db
+```
+
+Pour le détail de la mise en ligne (fiche App Store Connect, clé `.p8`, groupe de
+test interne, ce qui reste avant la review), voir [TESTFLIGHT.md](TESTFLIGHT.md).
+
+Pour tester sur un device sans passer par TestFlight, le profil `development-device`
+produit un build ad hoc — mais il a besoin de Metro, donc du Mac allumé et du
+téléphone sur le même réseau. Un build TestFlight est autonome : c'est presque
+toujours le chemin le plus court.
+
 ## Avant de publier
 
-- [ ] **Sign in with Apple natif** (`expo-apple-authentication`). L'OAuth web via
-      Supabase fonctionne, mais Apple exige le bouton natif pour la review.
+- [x] **Sign in with Apple natif** (`expo-apple-authentication`) — vérifié sur
+      device réel, `provider=apple` dans `auth.users`.
+- [x] Synchroniser la vitrine et le garage vers Supabase (`src/services/sync.ts`).
 - [ ] Remplacer icône et splash dans `assets/`.
 - [ ] Vérifier les produits RevenueCat en sandbox sur les deux stores.
-- [ ] Synchroniser la vitrine et le garage vers Supabase (aujourd'hui local-first,
-      le schéma est prêt).
 - [ ] Étendre le catalogue au-delà de 25 marques — c'est le levier de rétention
       le plus direct. Les événements `scan_succeeded` avec `matched: false`
       portent `raw_make`/`raw_model` : c'est la liste de ce qu'il faut ajouter.

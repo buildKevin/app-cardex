@@ -17,6 +17,13 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+*.cer
+
+# Build artifacts — `eas build --local` les dépose à la racine du projet
+build-*.ipa
+*.ipa
+*.apk
+*.aab
 
 # Metro
 .metro-health-check*
