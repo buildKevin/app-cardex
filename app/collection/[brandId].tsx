@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -108,7 +109,11 @@ export default function BrandCollection() {
                 onPress={() => router.push(`/car/${entry.id}`)}
               >
                 <View style={styles.unlocked}>
-                  <CarSilhouette width={104} color="#2A2A33" />
+                  {entry.photoUri ? (
+                    <Image source={{ uri: entry.photoUri }} style={styles.photo} contentFit="cover" />
+                  ) : (
+                    <CarSilhouette width={104} color="#2A2A33" />
+                  )}
                 </View>
                 <Text variant="caption" tone="tertiary">
                   {formatPower(car.power)}
@@ -192,6 +197,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+  },
+  photo: {
+    ...StyleSheet.absoluteFill,
   },
   tag: {
     marginTop: spacing.sm,

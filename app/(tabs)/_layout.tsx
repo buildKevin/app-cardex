@@ -30,6 +30,9 @@ export default function TabsLayout() {
           name={tab.name}
           options={{
             title: tab.title,
+            // Per-screen as well as in screenOptions: every tab draws its own
+            // large title, so the navigator header must never appear.
+            headerShown: false,
             tabBarIcon: ({ color }) => <Icon name={tab.icon} size={23} color={String(color)} />,
           }}
         />
