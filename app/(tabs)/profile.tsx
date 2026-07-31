@@ -27,6 +27,7 @@ import { hasSupabase } from '../../src/services/env';
 import { deletePhoto } from '../../src/services/photo';
 import {
   getCustomerInfo,
+  getProPlans,
   isPurchasesUiAvailable,
   presentCustomerCenter,
   readProStatus,
@@ -82,6 +83,7 @@ export default function Profile() {
   const [draftName, setDraftName] = useState(profile.username);
   const [busy, setBusy] = useState<Busy>(null);
   const [pro, setProStatus] = useState<ProStatus | null>(null);
+  const [price, setPrice] = useState<string | null>(null);
 
   // Renewal date and plan come from RevenueCat, never from local state — the
   // store flag only says whether Pro is on, not what the customer is paying for.
@@ -89,6 +91,24 @@ export default function Profile() {
     let live = true;
     getCustomerInfo().then((info) => {
       if (live && info) setProStatus(readProStatus(info));
+    });
+    return () => {
+      live = false;
+    };
+  }, [isPro]);
+
+  /**
+   * The price on the card, straight from the store so it stays localised. Only
+   * shown when the offering sells a single plan — with several, the honest
+   * comparison belongs on the paywall, not in a one-line caption.
+   */
+  useEffect(() => {
+    if (isPro) return;
+    let live = true;
+    getProPlans().then((plans) => {
+      if (!live || plans.length !== 1) return;
+      const [plan] = plans;
+      setPrice(plan.isLifetime ? `${plan.priceString} · paiement unique` : plan.priceString);
     });
     return () => {
       live = false;
@@ -394,6 +414,7 @@ export default function Profile() {
 
           <Button
             label="Débloquer"
+            caption={price ?? undefined}
             size="md"
             onPress={() => router.push('/paywall?context=profile')}
             disabled={busy !== null}
