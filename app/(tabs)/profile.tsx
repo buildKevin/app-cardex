@@ -2,7 +2,6 @@ import * as Application from 'expo-application';
 import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -33,7 +32,7 @@ import { LEGAL, hasLegalLinks } from '../../src/config/release';
 import { events, resetAnalytics, track } from '../../src/services/analytics';
 import { deleteAccount, signOut } from '../../src/services/auth';
 import { hasSupabase } from '../../src/services/env';
-import { deletePhoto, prepareAvatar } from '../../src/services/photo';
+import { deletePhoto, pickImage, prepareAvatar } from '../../src/services/photo';
 import {
   getCustomerInfo,
   getProPlans,
@@ -145,39 +144,33 @@ export default function Profile() {
    * moment, or every change would leave one behind forever.
    */
   const pickAvatar = async (source: 'library' | 'camera') => {
-    if (source === 'camera') {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert(
-          'Appareil photo bloqué',
-          'Autorise CarDex à utiliser l’appareil photo dans les réglages de ton téléphone.',
-          [
-            { text: 'Annuler', style: 'cancel' },
-            { text: 'Ouvrir les réglages', onPress: () => Linking.openSettings() },
-          ],
-        );
-        return;
-      }
+    const picked = await pickImage(source);
+
+    if (picked.status === 'denied') {
+      Alert.alert(
+        'Appareil photo bloqué',
+        'Autorise CarDex à utiliser l’appareil photo dans les réglages de ton téléphone.',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { text: 'Ouvrir les réglages', onPress: () => Linking.openSettings() },
+        ],
+      );
+      return;
     }
 
-    const options: ImagePicker.ImagePickerOptions = {
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 1,
-    };
+    if (picked.status === 'unavailable') {
+      Alert.alert(
+        'Sélecteur de photos indisponible',
+        'Cette version de l’app ne peut pas ouvrir tes photos. Relance une build native.',
+      );
+      return;
+    }
 
-    const result =
-      source === 'camera'
-        ? await ImagePicker.launchCameraAsync(options)
-        : await ImagePicker.launchImageLibraryAsync(options);
-
-    const asset = result.canceled ? undefined : result.assets[0];
-    if (!asset) return;
+    if (picked.status === 'cancelled') return;
 
     setSavingAvatar(true);
     const previous = profile.avatarUri;
-    const uri = await prepareAvatar(asset.uri);
+    const uri = await prepareAvatar(picked.uri);
     setSavingAvatar(false);
 
     if (!uri) {

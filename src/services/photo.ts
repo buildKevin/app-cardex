@@ -10,6 +10,7 @@ const DIR_NAME = 'photos';
 
 /** The avatar is never shown larger than 64pt, so this is generous already. */
 const AVATAR_WIDTH = 256;
+const AVATAR_DIR_NAME = 'avatars';
 
 export interface PreparedPhoto {
   /** JPEG payload for the vision model. */
@@ -18,7 +19,64 @@ export interface PreparedPhoto {
   uri: string;
 }
 
-const AVATAR_DIR_NAME = 'avatars';
+type ImagePickerSdk = typeof import('expo-image-picker');
+
+let picker: ImagePickerSdk | null = null;
+let pickerLoadAttempted = false;
+
+/**
+ * `expo-image-picker` calls `requireNativeModule` while it is being imported, so
+ * a top-level import takes the whole screen down on any build made before the
+ * pod was installed. Same lazy `require` as the purchase modules.
+ */
+function loadPicker(): ImagePickerSdk | null {
+  if (!pickerLoadAttempted) {
+    pickerLoadAttempted = true;
+    try {
+      picker = require('expo-image-picker');
+    } catch {
+      picker = null;
+    }
+  }
+  return picker;
+}
+
+export type PickedImage =
+  | { status: 'picked'; uri: string }
+  | { status: 'cancelled' }
+  | { status: 'denied' }
+  | { status: 'unavailable' };
+
+/**
+ * Opens the system picker or the camera and returns a cache uri. Cropping is on
+ * and square, because every place we show a picked image is a circle.
+ */
+export async function pickImage(source: 'library' | 'camera'): Promise<PickedImage> {
+  const sdk = loadPicker();
+  if (!sdk) return { status: 'unavailable' };
+
+  // The library needs no permission on SDK 57 — it goes through the system
+  // picker, which hands back one image without granting access to the rest.
+  if (source === 'camera') {
+    const permission = await sdk.requestCameraPermissionsAsync();
+    if (!permission.granted) return { status: 'denied' };
+  }
+
+  const options: import('expo-image-picker').ImagePickerOptions = {
+    mediaTypes: ['images'],
+    allowsEditing: true,
+    aspect: [1, 1],
+    quality: 1,
+  };
+
+  const result =
+    source === 'camera'
+      ? await sdk.launchCameraAsync(options)
+      : await sdk.launchImageLibraryAsync(options);
+
+  const asset = result.canceled ? undefined : result.assets[0];
+  return asset ? { status: 'picked', uri: asset.uri } : { status: 'cancelled' };
+}
 
 function documentDirectory(name: string): Directory {
   const dir = new Directory(Paths.document, name);
