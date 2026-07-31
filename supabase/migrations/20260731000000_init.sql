@@ -3,7 +3,9 @@
 -- Badge unlocks and collection progress are derived from `garage`, never stored,
 -- so they can never drift out of sync with the cars actually owned.
 
-create extension if not exists "uuid-ossp";
+-- gen_random_uuid() is built into Postgres 13+, so no extension is needed.
+-- uuid-ossp lived in the `extensions` schema on hosted Supabase and was not on
+-- the migration's search_path, which made the whole migration fail there.
 
 -- ───────────────────────────────────────────────────────────── enums ─────────
 do $$ begin
@@ -75,7 +77,7 @@ create trigger on_auth_user_created
 
 -- ───────────────────────────────────────────────────────────── garage ───────
 create table if not exists public.garage (
-  id            uuid primary key default uuid_generate_v4(),
+  id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references public.users (id) on delete cascade,
   -- null when the vision model returned a car that is not in the catalogue yet.
   car_id        text references public.cars (id) on delete set null,
