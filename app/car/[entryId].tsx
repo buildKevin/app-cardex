@@ -11,7 +11,8 @@ import { Screen } from '../../src/components/Screen';
 import { SpecRow } from '../../src/components/SpecRow';
 import { Text } from '../../src/components/Text';
 import { getBrand } from '../../src/data/brands';
-import { formatDiscoveredAt, formatPower, formatPrice, formatYears } from '../../src/lib/format';
+import { entryFiche } from '../../src/lib/fiche';
+import { formatDiscoveredAt, formatPower, formatPrice } from '../../src/lib/format';
 import { RARITY_LABEL } from '../../src/lib/rarity';
 import { events, track } from '../../src/services/analytics';
 import { deletePhoto } from '../../src/services/photo';
@@ -39,6 +40,7 @@ export default function CarDetail() {
   }
 
   const brand = getBrand(entry.brandId);
+  const fiche = entryFiche(entry, car, brand);
   const inShowcase = showcase.includes(entry.id);
   const showcaseFull = showcase.length >= SHOWCASE_SIZE;
 
@@ -92,7 +94,7 @@ export default function CarDetail() {
         <Text variant="label" tone="secondary" uppercase>
           {entry.make}
         </Text>
-        <Text variant="display">{car?.model ?? entry.model}</Text>
+        <Text variant="display">{fiche.model}</Text>
 
         <View style={styles.tags}>
           <RarityTag rarity={entry.rarity} size="md" />
@@ -103,17 +105,23 @@ export default function CarDetail() {
 
         <Card style={styles.specs}>
           <SpecRow label="Marque" value={brand?.name ?? entry.make} />
-          <SpecRow label="Modèle" value={car?.model ?? entry.model} />
-          {car ? <SpecRow label="Génération" value={car.generation} /> : null}
-          <SpecRow label="Année" value={entry.year ? String(entry.year) : car ? formatYears(car) : '—'} />
-          <SpecRow label="Puissance" value={car ? formatPower(car.power) : 'Inconnue'} />
-          <SpecRow label="Pays" value={car?.country ?? brand?.country ?? 'Inconnu'} />
-          <SpecRow label="Prix neuf" value={car ? formatPrice(car.priceNew) : 'Inconnu'} />
+          <SpecRow label="Modèle" value={fiche.model} />
+          {fiche.generation ? <SpecRow label="Génération" value={fiche.generation} /> : null}
+          <SpecRow label="Année" value={entry.year ? String(entry.year) : (fiche.years ?? '—')} />
+          <SpecRow label="Puissance" value={fiche.power ? formatPower(fiche.power) : 'Inconnue'} />
+          <SpecRow label="Pays" value={fiche.country ?? 'Inconnu'} />
+          <SpecRow label="Prix neuf" value={fiche.priceNew ? formatPrice(fiche.priceNew) : 'Inconnu'} />
           <SpecRow label="Rareté" value={RARITY_LABEL[entry.rarity]} />
           <SpecRow label="Découverte" value={formatDiscoveredAt(entry.discoveredAt)} last />
         </Card>
 
-        {!car ? (
+        {fiche.source === 'community' ? (
+          <Text variant="caption" tone="tertiary" style={styles.note}>
+            {"Cette voiture n'est pas dans notre catalogue : ses caractéristiques ont été estimées lors de sa première découverte, et sont les mêmes pour tous les joueurs qui la scannent."}
+          </Text>
+        ) : null}
+
+        {fiche.source === 'unknown' ? (
           <Text variant="caption" tone="tertiary" style={styles.note}>
             Cette voiture n'est pas encore dans notre catalogue, donc certaines caractéristiques
             manquent. Elle compte quand même dans ton garage.

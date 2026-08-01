@@ -1,6 +1,7 @@
 import { CARS } from '../data/cars';
 import { BRANDS_BY_ID } from '../data/brands';
-import type { Rarity, VisionResult } from '../data/types';
+import type { DiscoveredCar, Rarity, VisionResult } from '../data/types';
+import { RARITY_ORDER } from '../lib/rarity';
 import { isReleaseMisconfigured } from '../config/release';
 import { ENV, hasOpenAI, hasSupabase } from './env';
 import { supabase } from './supabase';
@@ -30,6 +31,38 @@ const PROMPT = [
   "N'invente aucune autre caractéristique. Si aucune voiture n'est visible, mets make et model à null.",
 ].join('\n');
 
+/**
+ * The community fiche, when the edge function had to rate the car itself.
+ *
+ * It comes from our own server, so this only guards against a shape mismatch
+ * between an older app build and a newer function — never against hostile data.
+ */
+function parseDiscovered(raw: unknown): DiscoveredCar | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const data = raw as Record<string, unknown>;
+  if (typeof data.id !== 'string' || typeof data.make !== 'string' || typeof data.model !== 'string') {
+    return null;
+  }
+
+  const num = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+  const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+
+  return {
+    id: data.id,
+    brandId: text(data.brandId),
+    make: data.make,
+    model: data.model,
+    generation: text(data.generation),
+    yearFrom: num(data.yearFrom),
+    yearTo: num(data.yearTo),
+    power: num(data.power),
+    country: text(data.country),
+    priceNew: num(data.priceNew),
+    rarity: RARITY_ORDER.includes(data.rarity as Rarity) ? (data.rarity as Rarity) : 'rare',
+    status: data.status === 'confirmed' ? 'confirmed' : 'pending',
+  };
+}
+
 /** Which of the four fields we accept, and nothing else. */
 function parseResult(raw: unknown): VisionResult {
   if (!raw || typeof raw !== 'object') throw new VisionError('unreadable');
@@ -50,6 +83,7 @@ function parseResult(raw: unknown): VisionResult {
     confidence: Number.isFinite(confidence) ? Math.min(1, Math.max(0, confidence)) : 0.6,
     // Present only when the edge function ruled on it.
     serverCarId: 'car_id' in data ? ((data.car_id as string | null) ?? null) : undefined,
+    serverDiscovered: 'discovered' in data ? parseDiscovered(data.discovered) : undefined,
   };
 }
 
@@ -158,7 +192,10 @@ export const visionMode: 'supabase' | 'openai' | 'mock' = hasSupabase
 
 /**
  * The model returns make / model / generation / year / confidence — nothing else.
- * Every other characteristic is enriched from our own catalogue.
+ * Every other characteristic is enriched from our own catalogue, or, when the
+ * catalogue has no such car, from the community fiche the edge function stores
+ * on the first sighting (`serverDiscovered`). Neither of the two local paths
+ * below can produce one: there is no server to write it to.
  */
 export async function identifyCar(base64: string): Promise<VisionResult> {
   if (visionMode === 'supabase') return identifyViaSupabase(base64);

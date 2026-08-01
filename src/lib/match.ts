@@ -1,6 +1,6 @@
 import { BRANDS, BRANDS_BY_ID } from '../data/brands';
 import { CARS, CARS_BY_ID } from '../data/cars';
-import type { Brand, Car, VisionResult } from '../data/types';
+import type { Brand, Car, DiscoveredCar, VisionResult } from '../data/types';
 
 /** Lowercase, strip accents, collapse everything that isn't a letter or digit. */
 export function normalize(input: string): string {
@@ -31,6 +31,8 @@ export function cleanModelName(raw: string): string {
 export interface ResolvedScan {
   brand?: Brand;
   car?: Car;
+  /** Set instead of `car` when the server rated a car we do not list. */
+  discovered?: DiscoveredCar;
 }
 
 /**
@@ -82,8 +84,8 @@ function matchCar(brand: Brand, model: string): Car | undefined {
 }
 
 /**
- * Turn the raw vision output into catalogue data. Both fields are optional:
- * an unknown make still lands in the garage, it just won't fill a collection.
+ * Turn the raw vision output into catalogue data. Every field is optional: an
+ * unknown make still lands in the garage, it just won't fill a collection.
  *
  * When the server already ruled (`serverCarId`), that verdict wins. The server
  * owns the scan counter, so letting the client reach its own conclusion is how
@@ -98,8 +100,13 @@ export function resolveScan(result: VisionResult): ResolvedScan {
 
     // The server said "no match", or named a car this app build does not know
     // (catalogue newer than the bundle). Either way we must not invent a match,
-    // but we can still name the brand for display.
-    return { brand: matchBrand(result.make) };
+    // but there may be a community fiche for it, and we can still name the
+    // brand for display. The server's brand is preferred over our own guess for
+    // the same reason its match is: it read the catalogue as it is now.
+    const discovered = result.serverDiscovered ?? undefined;
+    const brand =
+      (discovered?.brandId ? BRANDS_BY_ID[discovered.brandId] : undefined) ?? matchBrand(result.make);
+    return { brand, discovered };
   }
 
   const brand = matchBrand(result.make);

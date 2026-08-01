@@ -19,9 +19,37 @@ Things that already bit us on SDK 57 / RN 0.86:
   `colors`, `type`, `spacing`, `radii`, `motion`, `gutter`.
 - **Grids use `gridItemWidth(n)`**, never percentages. Percentage widths round up
   past 100% and the row silently collapses to one column.
-- **The vision model returns only** `make`, `model`, `generation`, `year`,
-  `confidence`. Every other characteristic is enriched from `src/data/cars.ts`.
-  Do not extend the prompt to ask for specs.
+- **The *identification* prompt returns only** `make`, `model`, `generation`,
+  `year`, `confidence`. Its answers feed `match_car_id()`, and a prompt that also
+  produced specs would be a prompt whose make and model drift. Do not extend it.
+  Specs come from `src/data/cars.ts`.
+- **A car the catalogue does not list gets rated by a second, separate model
+  call**, and the answer is stored in `discovered_cars` — written once, served
+  verbatim to everyone who scans that car afterwards, so two players never get
+  different XP for the same Pagani. Three rules hold it together:
+  - It is **not** a row in `public.cars`. That table is regenerated from
+    `seed.sql`, and a discovered car must never enlarge a brand's collection —
+    otherwise a player who completed Ferrari watches the badge come off because
+    someone else found one more. `stats.ts` counts collections by `carId` alone,
+    which is what keeps this true; keep it that way.
+  - The rating call carries **no image** and runs at temperature 0. Rarity is a
+    property of the model, not of the photograph, or the same car scores
+    differently in different light.
+  - A fiche is **capped at `epic`** (`proposed_rarity` keeps what the model
+    asked for) and stays `pending`, visible only to its discoverer, until a
+    second *independent* scan agrees on make + model. Legendary is granted by
+    review, never on the word of one photo.
+- **A rated car costs a scan; an unrated one does not.** Both `identify-car` and
+  the client mirror in `scan.tsx` charge on `car_id || discovered`. What stays
+  free is the case we cannot answer at all — that is our catalogue gap, not the
+  player's. XP is frozen on the garage entry at discovery, so correcting a fiche
+  later never rewrites what a player already earned.
+- **`revoke execute` must say `from public`, not `from anon, authenticated`.**
+  Postgres grants execute to PUBLIC on every new function and those roles
+  inherit it, so naming them revokes nothing at all. This silently left
+  `record_discovered_car` wide open on the first pass — any anon key could post
+  itself a fiche. Verify a revoke by actually calling the function under
+  `set role authenticated`.
 - **Collection progress and badges are derived**, never stored. If you find
   yourself adding an `unlocked_badges` table, recompute from `garage` instead.
 - **Every external service degrades to a no-op** when its key is missing, so the
@@ -49,8 +77,10 @@ Things that already bit us on SDK 57 / RN 0.86:
   locally in demo mode and the direct-OpenAI dev path, where no scan is charged,
   so a divergence can no longer mischarge anyone.
 - **`match_car_id()` in Postgres still mirrors `src/lib/match.ts`**, because
-  demo mode must behave like production. After touching either, run
-  `npm run verify:matchers` — it stands up Postgres, applies schema + seed, and
+  demo mode must behave like production. Its brand half lives in
+  `match_collection_id()`, which `identify-car` also calls on its own to attach a
+  brand to a discovered car without claiming a catalogue match.
+  After touching either, run `npm run verify:matchers` — it stands up Postgres, applies schema + seed, and
   asserts both agree on every catalogue car, every alias, and every pair of
   brands whose aliases overlap. Exits non-zero on divergence, so it belongs in
   CI. Needs Docker.

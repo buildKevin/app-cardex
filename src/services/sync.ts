@@ -1,6 +1,6 @@
 import { File } from 'expo-file-system';
 
-import type { GarageEntry } from '../data/types';
+import type { DiscoveredCar, GarageEntry } from '../data/types';
 import { supabase } from './supabase';
 
 /**
@@ -41,6 +41,27 @@ async function uploadPhoto(userId: string, entry: GarageEntry): Promise<string |
   }
 }
 
+/** The embedded `discovered_cars` row, back into the local shape. */
+function ficheFromRow(row: unknown): DiscoveredCar | null {
+  if (!row || typeof row !== 'object') return null;
+  const fiche = row as Record<string, any>;
+
+  return {
+    id: fiche.id,
+    brandId: fiche.collection_id ?? null,
+    make: fiche.make,
+    model: fiche.model,
+    generation: fiche.generation ?? null,
+    yearFrom: fiche.year_from ?? null,
+    yearTo: fiche.year_to ?? null,
+    power: fiche.power ?? null,
+    country: fiche.country ?? null,
+    priceNew: fiche.price_new ?? null,
+    rarity: fiche.rarity,
+    status: fiche.status,
+  };
+}
+
 /** Sends one entry up. Returns null when it could not be stored. */
 export async function pushEntry(userId: string, entry: GarageEntry): Promise<PushResult | null> {
   if (!supabase) return null;
@@ -52,6 +73,7 @@ export async function pushEntry(userId: string, entry: GarageEntry): Promise<Pus
     .insert({
       user_id: userId,
       car_id: entry.carId,
+      discovered_car_id: entry.discovered?.id ?? null,
       collection_id: entry.brandId,
       make: entry.make,
       model: entry.model,
@@ -80,7 +102,14 @@ export async function pullGarage(userId: string): Promise<GarageEntry[]> {
 
   const { data, error } = await supabase
     .from('garage')
-    .select('id, car_id, collection_id, make, model, year, rarity, photo_path, xp, confidence, discovered_at')
+    // The embed brings the community specs back on a reinstall, not just the
+    // name. A deleted fiche embeds as null: the car keeps its name, rarity and
+    // XP, and only loses the spec rows. Written as one literal because
+    // supabase-js parses this string at the type level and a concatenated one
+    // degrades to an error type.
+    .select(
+      'id, car_id, collection_id, make, model, year, rarity, photo_path, xp, confidence, discovered_at, discovered_cars(id, collection_id, make, model, generation, year_from, year_to, power, country, price_new, rarity, status)',
+    )
     .eq('user_id', userId)
     .order('discovered_at', { ascending: false });
 
@@ -101,6 +130,7 @@ export async function pullGarage(userId: string): Promise<GarageEntry[]> {
     remoteId: row.id as string,
     carId: row.car_id,
     brandId: row.collection_id,
+    discovered: ficheFromRow(row.discovered_cars),
     make: row.make,
     model: row.model,
     year: row.year,

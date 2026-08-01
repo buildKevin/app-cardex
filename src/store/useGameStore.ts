@@ -94,18 +94,21 @@ export const useGameStore = create<GameState>()(
       consumeScan: () => set((state) => ({ scanCount: state.scanCount + 1 })),
 
       addScan: (result, photoUri) => {
-        const { car, brand } = resolveScan(result);
-        // An uncatalogued car inherits its brand's typical tier rather than the
+        const { car, brand, discovered } = resolveScan(result);
+        // Three tiers of answer, best first: our catalogue, then the community
+        // fiche the server wrote for a car we do not list, then — when nobody
+        // could rate the car at all — the brand's typical tier rather than the
         // floor, so recognising a Ferrari we do not list still feels like one.
-        const rarity: Rarity = car?.rarity ?? brandBaselineRarity(brand?.id);
+        const rarity: Rarity = car?.rarity ?? discovered?.rarity ?? brandBaselineRarity(brand?.id);
 
         const entry: GarageEntry = {
           id: createId(),
           carId: car?.id ?? null,
           brandId: brand?.id ?? null,
-          make: brand?.name ?? cleanModelName(result.make),
-          model: car?.model ?? cleanModelName(result.model),
-          year: result.year ?? car?.yearFrom ?? null,
+          discovered: discovered ?? null,
+          make: brand?.name ?? discovered?.make ?? cleanModelName(result.make),
+          model: car?.model ?? discovered?.model ?? cleanModelName(result.model),
+          year: result.year ?? car?.yearFrom ?? discovered?.yearFrom ?? null,
           rarity,
           photoUri,
           discoveredAt: new Date().toISOString(),

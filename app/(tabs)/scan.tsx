@@ -99,17 +99,21 @@ export default function Scan() {
 
       const entry = addScan(result, photo.uri);
 
-      // Only a catalogue match costs a scan. Burning one of ten free scans on a
-      // car we simply do not list yet is our gap, not the player's.
+      // A catalogue match costs a scan, and so does a car the server managed to
+      // rate — both give the player a real card. What stays free is the case we
+      // cannot answer at all: that is our gap, not the player's. Mirrors the
+      // condition in identify-car, which owns the real counter.
       const matched = entry.carId !== null;
-      if (matched) consumeScan();
+      const charged = matched || entry.discovered != null;
+      if (charged) consumeScan();
 
       track(events.scanSucceeded, {
         make: entry.make,
         model: entry.model,
         rarity: entry.rarity,
         matched,
-        charged: matched,
+        charged,
+        discovered: entry.discovered != null,
         confidence: Math.round(result.confidence * 100) / 100,
         // Raw strings on a miss: this is the list of cars worth adding next.
         raw_make: matched ? undefined : result.make,

@@ -12,6 +12,7 @@ import { Glow } from '../src/components/Glow';
 import { RarityTag } from '../src/components/RarityTag';
 import { Text } from '../src/components/Text';
 import { getBrand } from '../src/data/brands';
+import { entryFiche } from '../src/lib/fiche';
 import { formatPower } from '../src/lib/format';
 import { rarityColor } from '../src/lib/rarity';
 import { events, track } from '../src/services/analytics';
@@ -46,6 +47,7 @@ export default function Reveal() {
 
   const accent = rarityColor(entry.rarity);
   const brand = getBrand(entry.brandId);
+  const fiche = entryFiche(entry, car, brand);
   const brandProgress = entry.brandId ? stats.brands[entry.brandId] : undefined;
 
   // This scan finished the set if the brand is now full and this is our first
@@ -91,13 +93,13 @@ export default function Reveal() {
           </View>
 
           <View style={styles.specs}>
-            {car ? (
+            {fiche.power ? (
               <Text variant="body" tone="secondary">
-                {formatPower(car.power)}
+                {formatPower(fiche.power)}
               </Text>
             ) : null}
             <Text variant="body" tone="secondary">
-              {car?.country ?? brand?.country ?? '—'}
+              {fiche.country ?? '—'}
             </Text>
             <Text variant="body" tone="secondary">
               {entry.year ?? '—'}
@@ -117,9 +119,14 @@ export default function Reveal() {
       {!car ? (
         <Animated.View entering={FadeIn.delay(400).duration(motion.base)} style={styles.unlisted}>
           <Text variant="caption" tone="tertiary" center>
-            {brand
-              ? `Pas encore dans la collection ${brand.name} — elle rejoint ton garage, garde tes XP, et ce scan ne t'est pas compté.`
-              : "Marque inconnue de notre catalogue — elle rejoint quand même ton garage, et ce scan ne t'est pas compté."}
+            {fiche.source === 'community'
+              ? // A rated car pays full XP but fills no collection, and unlike an
+                // unrated one it did cost a scan — saying so here is the only
+                // place the player can reconcile the counter they just saw move.
+                `Première fois qu'on voit cette ${entry.make} : on l'a évaluée pour toi. Elle ne compte pas dans une collection, mais elle te rapporte ses ${entry.xp} XP.`
+              : brand
+                ? `Pas encore dans la collection ${brand.name} — elle rejoint ton garage, garde tes XP, et ce scan ne t'est pas compté.`
+                : "Marque inconnue de notre catalogue — elle rejoint quand même ton garage, et ce scan ne t'est pas compté."}
           </Text>
         </Animated.View>
       ) : null}
