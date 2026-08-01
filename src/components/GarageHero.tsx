@@ -1,7 +1,6 @@
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getCar } from '../data/cars';
 import type { GarageEntry } from '../data/types';
@@ -18,7 +17,6 @@ import { Text } from './Text';
 interface GarageHeroProps {
   /** The latest sighting, or null for a garage that has never been used. */
   entry: GarageEntry | null;
-  level: number;
   onPress?: () => void;
 }
 
@@ -31,9 +29,8 @@ interface GarageHeroProps {
  * the app, so it gets the whole top of the screen and everything else reads as
  * secondary underneath.
  */
-export function GarageHero({ entry, level, onPress }: GarageHeroProps) {
+export function GarageHero({ entry, onPress }: GarageHeroProps) {
   const { width } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
   const pressed = useSharedValue(0);
 
   const height = Math.min(Math.round(width * 1.06), 470);
@@ -60,7 +57,8 @@ export function GarageHero({ entry, level, onPress }: GarageHeroProps) {
         </View>
       )}
 
-      {/* Legibility, top and bottom. Neither fade is visible on its own. */}
+      {/* Legibility: the status bar on top, the caption below. Neither fade is
+          visible on its own. */}
       <Scrim from="top" height="32%" strength={0.7} />
       <Scrim height="66%" strength={0.94} />
 
@@ -68,17 +66,6 @@ export function GarageHero({ entry, level, onPress }: GarageHeroProps) {
           would swallow the only colour on the screen. */}
       <View style={[styles.bloom, { bottom: -Math.round(width * 0.44) }]} pointerEvents="none">
         <Glow color={accent} width={Math.round(width * 1.3)} intensity={entry?.photoUri ? 0.24 : 0.32} />
-      </View>
-
-      <View style={[styles.top, { paddingTop: insets.top + spacing.xs }]}>
-        <Text variant="overline" tone="secondary" uppercase>
-          {entry ? 'Dernière trouvaille' : 'Ton garage'}
-        </Text>
-        <View style={styles.levelPill}>
-          <Text variant="overline" uppercase>
-            Niveau {level}
-          </Text>
-        </View>
       </View>
 
       <View style={styles.caption}>
@@ -163,23 +150,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-  },
-  top: {
-    position: 'absolute',
-    top: 0,
-    left: gutter,
-    right: gutter,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  levelPill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radii.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderStrong,
-    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   caption: {
     position: 'absolute',

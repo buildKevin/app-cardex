@@ -43,7 +43,6 @@ export default function Garage() {
       <Screen scroll bleed edgeToEdgeTop contentStyle={styles.content}>
         <GarageHero
           entry={featured}
-          level={level}
           onPress={featured ? () => router.push(`/car/${featured.id}`) : undefined}
         />
 
