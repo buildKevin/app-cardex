@@ -32,7 +32,16 @@ Le script charge `.env.asc` (clé ASC), force le locale UTF-8 que CocoaPods exig
 sur cette machine, joue `verify:release`, construit en local (gratuit, aucun
 crédit EAS) puis upload. Sans `--submit`, il construit seulement.
 
-**Il doit tourner en interactif, et ce n'est pas contournable.** Dans eas-cli,
+L'upload, lui, tourne sans interaction depuis que `eas.json` porte
+`submit.production.ios.ascAppId` (`6796820993`). Sans ça, `eas submit` commence
+par « Ensuring your app exists on App Store Connect », étape qui s'authentifie
+par **Apple ID** et non par la clé ASC : lancée en tâche de fond elle meurt sur
+`Input is required, but stdin is not readable`. Le build réussit, seul l'upload
+échoue — l'archive est alors à la racine et il suffit de relancer
+`eas submit --platform ios --profile production --path build-<ts>.ipa`.
+
+**Le build doit tourner en interactif la première fois, et ce n'est pas
+contournable.** Dans eas-cli,
 `credentials/ios/actions/SetUpDistributionCertificate.js` a un chemin
 non-interactif qui est un stub (`// TODO: implement validation`) : il ne crée
 jamais de certificat et lève `MissingCredentialsNonInteractiveError`. Aucune
@@ -155,9 +164,10 @@ le webhook, et l'équivalence des deux matchers (515 sondes).
 
 1. ~~fiche App Store Connect~~ ✅ *CarDex - Car Spotting*, ASC App ID `6796820993`
 2. ~~clé API `.p8`~~ ✅
-3. ~~build + upload~~ ✅ **build 1.0.0 (4) « En cours de test »** sur TestFlight
-   interne depuis le 01/08/2026
-4. tester sur TestFlight : Apple Sign-In, scans OpenAI réels, sync garage ← ici
+3. ~~build + upload~~ ✅ **build 1.0.0 (5)** uploadé le 01/08/2026, il embarque
+   les fiches communautaires (`discovered_cars`)
+4. tester sur TestFlight : Apple Sign-In, scans OpenAI réels, sync garage, et
+   une voiture hors catalogue notée par l'IA ← ici
 5. puis seulement : URLs légales, produits IAP + clé RevenueCat, webhook, logos
 
 TestFlight **interne** (jusqu'à 100 testeurs de l'équipe) ne passe **aucune
