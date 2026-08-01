@@ -44,12 +44,23 @@ Things that already bit us on SDK 57 / RN 0.86:
   free is the case we cannot answer at all — that is our catalogue gap, not the
   player's. XP is frozen on the garage entry at discovery, so correcting a fiche
   later never rewrites what a player already earned.
-- **`revoke execute` must say `from public`, not `from anon, authenticated`.**
-  Postgres grants execute to PUBLIC on every new function and those roles
-  inherit it, so naming them revokes nothing at all. This silently left
-  `record_discovered_car` wide open on the first pass — any anon key could post
-  itself a fiche. Verify a revoke by actually calling the function under
-  `set role authenticated`.
+- **`revoke execute` must name all three: `from public, anon, authenticated`.**
+  Two independent grants exist and each looks sufficient alone. Postgres grants
+  execute to PUBLIC on every new function, which the two roles inherit, so
+  naming only them is a no-op. Supabase *also* ships `alter default privileges
+  … grant execute on functions to anon, authenticated, service_role`, so a
+  hosted project carries an explicit grant that `from public` alone leaves
+  intact. Both mistakes shipped here in turn, and the second one reached
+  production: an anon key POSTing `/rest/v1/rpc/record_discovered_car` got a 200
+  and wrote a fiche.
+- **A local Postgres cannot prove a revoke.** The test harness has no default
+  privileges, so `from public` gave a convincing `permission denied` there while
+  production stayed wide open. Verify against the deployed project with the anon
+  key — a 42501 from the real REST endpoint, or it is not closed.
+- **`security definer` functions ignore RLS**, so a policy on a table protects
+  nothing that a definer function returns. `find_discovered_car` would have
+  handed any client another player's `pending` fiche despite the policy. Either
+  revoke the function from clients, or do not make it definer.
 - **Collection progress and badges are derived**, never stored. If you find
   yourself adding an `unlocked_badges` table, recompute from `garage` instead.
 - **Every external service degrades to a no-op** when its key is missing, so the
