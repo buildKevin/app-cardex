@@ -496,16 +496,28 @@ end $$;
 -- do not exist, or confirm their own. The edge function calls them as
 -- service_role.
 --
--- It has to be `from public`, not `from anon, authenticated`. Postgres grants
--- execute to PUBLIC on every new function, and those two roles inherit it, so
--- revoking them by name leaves the inherited grant in place and changes
--- nothing — which is exactly what a first pass at this did.
+-- All three roles have to be named, because two independent grants exist and
+-- each looks sufficient on its own:
+--   * Postgres grants execute to PUBLIC on every new function, which anon and
+--     authenticated inherit — so `from anon, authenticated` alone is a no-op.
+--   * Supabase ships `alter default privileges ... grant execute on functions to
+--     anon, authenticated, service_role`, so a hosted project ALSO carries an
+--     explicit grant to those roles — which `from public` alone leaves intact.
+-- This test harness has no default privileges, so `from public` passes here and
+-- still leaves production open. Verify a revoke against the deployed project.
 revoke execute on function public.record_discovered_car(
   text, text, text, text, smallint, smallint, integer, text, integer, rarity, uuid, real
-) from public;
-revoke execute on function public.touch_discovered_car(text, uuid) from public;
+) from public, anon, authenticated;
+revoke execute on function public.touch_discovered_car(text, uuid)
+  from public, anon, authenticated;
+-- find_discovered_car is security definer too, so RLS does not apply to what it
+-- returns: a client calling it would read another player's pending fiche. The
+-- client reads fiches through the table, where the policy holds.
+revoke execute on function public.find_discovered_car(text, text)
+  from public, anon, authenticated;
 
 grant execute on function public.record_discovered_car(
   text, text, text, text, smallint, smallint, integer, text, integer, rarity, uuid, real
 ) to service_role;
 grant execute on function public.touch_discovered_car(text, uuid) to service_role;
+grant execute on function public.find_discovered_car(text, text) to service_role;
