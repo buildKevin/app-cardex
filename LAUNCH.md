@@ -62,18 +62,18 @@ pourquoi de chaque ligne.
 
 **Fiche App Store — attention, deux jeux de captures différents**
 
-- [ ] **A11.** **Capture de review par produit** (les trois, la même image
-      convient) : le paywall avec les vrais prix en euros et les liens
-      *Conditions · Confidentialité* visibles. À prendre depuis TestFlight sur
-      iPhone, une fois A7 câblé — le simulateur ne charge pas les produits
-      sandbox de façon fiable.
-- [ ] **A12.** **Captures marketing 6,7″** pour la fiche App Store
-      (iPhone 15/16/17 Pro Max). Obligatoires, et sans rapport avec A11.
-- [~] **A13.** Nom, sous-titre, catégories (Style de vie / Jeux) et droits sur le
-      contenu ✅ faits sur *Informations sur l'app*. **Restent la description, les
-      mots-clés, le texte promo, l'URL de support et le copyright**, qui sont sur
-      la page de la version 1.0, pas là — tout est rédigé dans
-      `docs/app-store-listing.md`, écran 3.
+- [ ] **A11.** **Remplacer la capture de review des produits.** Il y en a déjà
+      une sur les trois, mais elle montre les prix Test Store en dollars. À
+      reprendre depuis TestFlight, une fois le build en ligne — le simulateur ne
+      charge pas les produits sandbox de façon fiable.
+- [ ] **A12.** **Captures marketing en 1320 × 2868** (emplacement 6,9″), 3 mini,
+      5 conseillées. Sans rapport avec A11. **Un iPhone 17 Pro sort du
+      1206 × 2622 et Apple le refuse** — c'est le Pro Max qui donne la bonne
+      taille, vérifié sur cette machine. Un redimensionnement `sips` suffit, les
+      deux rapports d'aspect sont identiques à 0,06 %.
+- [x] **A13.** ✅ *Informations sur l'app* (nom, sous-titre, catégories Style de
+      vie / Jeux, droits sur le contenu) **et** page de la version 1.0
+      (description, mots-clés, texte promo, URL de support, copyright).
 - [x] **A14.** ✅ Classification d'âge : questionnaire 7 étapes rempli, 4+.
 - [x] **A15.** ✅ **App Privacy publiée**, 7 types déclarés — e-mail, photos,
       autre contenu (le pseudo), ID utilisateur, historique d'achats, interaction
@@ -83,10 +83,11 @@ pourquoi de chaque ligne.
       ce n'est pas une collecte. Les *données de performance* le sont aussi —
       PostHog capture des exceptions, pas des temps de chargement.
       L'URL de la politique est sur cette page, pas sur *Informations sur l'app*.
-- [ ] **A16.** Note pour la review — **rédigée dans `docs/app-store-listing.md`**.
-      Elle contient le point qui compte : le scan est **caméra uniquement**, donc
-      sans instruction explicite un testeur en bureau ne peut pas essayer la
-      fonction principale, et « impossible à vérifier » est un motif de rejet.
+- [x] **A16.** ✅ Note de review de l'app en place, *Connexion requise* décoché.
+      Son premier paragraphe porte tout le poids : le scan est **caméra
+      uniquement**, donc sans l'instruction de viser une photo sur un écran, un
+      vérificateur en bureau ne peut pas essayer la fonction principale — et
+      « impossible à vérifier » est un motif de rejet à part entière.
 
 **Deux décisions et une vérification à l'œil**
 
@@ -97,7 +98,14 @@ pourquoi de chaque ligne.
       commit. Le raisonnement : se tromper est réversible par une mise à jour,
       retirer préventivement est un coût certain payé au lancement. Corollaire
       non négociable : **aucun nom de marque dans les mots-clés App Store**.
-- [ ] **A18.** Anonymous sign-in sur le projet hébergé — voir § 1.2.
+- [ ] **A18.** Anonymous sign-in sur le projet hébergé — voir § 1.2. **La
+      dernière décision qui reste.**
+- [x] **A20.** ✅ Le « à vie » est en *Ready to Submit* : sa localisation, sa
+      capture, son prix et sa catégorie fiscale sont donc complets. Les deux
+      abonnements restent en *Missing Metadata* avec les **mêmes** métadonnées —
+      ce n'est pas un champ manquant, c'est la règle du premier abonnement à
+      renouvellement automatique, qui doit être soumis avec le binaire. Statut
+      d'attente, pas erreur ; il basculera à la soumission.
 - [x] **A19.** ✅ `icon.png` et `splash-icon.png` identiques : voulu, même marque
       au lancement. L'avertissement de `verify:release` est donc attendu.
 
