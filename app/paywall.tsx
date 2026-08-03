@@ -41,8 +41,6 @@ export default function Paywall() {
   const from = context ?? 'unknown';
   const fromLimit = context === 'limit';
   const fromRestyle = context === 'restyle';
-  // Only the onboarding paywall has nothing to go back to.
-  const fromOnboarding = context === 'onboarding';
 
   const RevenueCatUI = getPurchasesUi();
   const useRevenueCatUi = process.env.EXPO_PUBLIC_USE_REVENUECAT_UI === '1';
@@ -62,12 +60,15 @@ export default function Paywall() {
     });
   }, [from, RevenueCatUI, useRevenueCatUi]);
 
+  // One way out for every context now. The onboarding paywall used to replace
+  // itself with the garage, because it *was* the screen between onboarding and the
+  // garage and had nothing behind it; it now comes up over a garage the player is
+  // already standing in, and replacing that would stack a second copy of it.
   const leave = useCallback(() => {
     if (left.current) return;
     left.current = true;
-    if (fromOnboarding) router.replace('/(tabs)');
-    else router.back();
-  }, [fromOnboarding, router]);
+    router.back();
+  }, [router]);
 
   const dismiss = useCallback(() => {
     if (left.current) return;

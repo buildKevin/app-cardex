@@ -34,7 +34,7 @@ import { StickerReveal } from '../src/components/StickerReveal';
 import { Text } from '../src/components/Text';
 import { CARS_BY_BRAND } from '../src/data/cars';
 import type { Brand, Car } from '../src/data/types';
-import { armGarageDoor } from '../src/lib/garageDoor';
+import { armGarageDoor, armWelcomePaywall } from '../src/lib/welcome';
 import { resolveScan } from '../src/lib/match';
 import { brandReaction, carReaction, carSpecLine } from '../src/lib/onboardingBanter';
 import { displayPhoto, isSticker, originalPhoto } from '../src/lib/photo';
@@ -638,13 +638,18 @@ export default function Onboarding() {
           : 'Ton garage est prêt';
 
     /**
-     * Leaves through the door. `armGarageDoor` has to fire before the paywall,
-     * not after it: this screen is gone by the time the garage mounts, so the
-     * request travels in a module flag rather than on the navigation.
+     * Leaves through the door, into the garage — not into the paywall.
+     *
+     * "Entrer dans mon garage" used to land on a price list, which made
+     * dismissing one the first thing a player did with the app and the last thing
+     * they did with the sticker they had just been given. The offer follows them
+     * in a few seconds later instead; both requests travel in module flags,
+     * because this screen is gone by the time the garage mounts.
      */
     const leave = () => {
       armGarageDoor();
-      router.replace('/paywall?context=onboarding');
+      armWelcomePaywall();
+      router.replace('/(tabs)');
     };
 
     return (

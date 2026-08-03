@@ -1,10 +1,15 @@
-import { Tabs } from 'expo-router';
-import { useState } from 'react';
+import { Tabs, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Dock } from '../../src/components/Dock';
 import { GarageDoor } from '../../src/components/GarageDoor';
-import { consumeGarageDoor } from '../../src/lib/garageDoor';
+import {
+  WELCOME_PAYWALL_DELAY,
+  consumeGarageDoor,
+  consumeWelcomePaywall,
+} from '../../src/lib/welcome';
+import { useGameStore } from '../../src/store/useGameStore';
 import { colors } from '../../src/theme';
 
 /**
@@ -23,12 +28,47 @@ const TABS: { name: string; title: string }[] = [
 ];
 
 export default function TabsLayout() {
+  const router = useRouter();
+  const isPro = useGameStore((state) => state.isPro);
+
   /**
    * Read once, on mount: `consumeGarageDoor` is a one-shot, so a re-render can
    * never re-arm the door and a tab change can never replay it. Here rather than
    * in `index.tsx` because the door has to cover the dock as well.
    */
   const [door, setDoor] = useState(consumeGarageDoor);
+  /** Same one-shot read, for the offer onboarding handed over instead of showing. */
+  const [welcomePaywall, setWelcomePaywall] = useState(consumeWelcomePaywall);
+
+  /**
+   * The paywall a player arriving from onboarding gets, once they have had their
+   * garage to themselves for a moment.
+   *
+   * Waits for the door: five seconds counted from arrival is three and a half
+   * seconds of garage and a second and a half of a door, which is not what the
+   * pause is for. Owned here rather than by the garage screen because a tab change
+   * would unmount that one and take the timer with it.
+   */
+  useEffect(() => {
+    if (!welcomePaywall || door) return;
+
+    // Nothing to sell a subscriber, and a reinstalling Pro player goes through
+    // onboarding like everybody else. RevenueCat has usually answered by the time
+    // the door is up; if it answers later, this effect re-runs and drops the flag.
+    if (isPro) {
+      setWelcomePaywall(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setWelcomePaywall(false);
+      // Pushed, not replaced: it sits over the garage now, so dismissing it puts
+      // the player back where they already were.
+      router.push('/paywall?context=onboarding');
+    }, WELCOME_PAYWALL_DELAY);
+
+    return () => clearTimeout(timer);
+  }, [welcomePaywall, door, isPro, router]);
 
   return (
     <View style={styles.root}>
