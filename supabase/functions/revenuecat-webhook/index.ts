@@ -30,8 +30,17 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 import { Telemetry } from '../_shared/posthog.ts';
 
-/** Entitlement identifier, matching EXPO_PUBLIC_REVENUECAT_ENTITLEMENT. */
-const ENTITLEMENT = Deno.env.get('REVENUECAT_ENTITLEMENT') ?? 'cardex_pro';
+/**
+ * Entitlement identifier, matching EXPO_PUBLIC_REVENUECAT_ENTITLEMENT.
+ *
+ * `CarDex Pro`, space and capitals included — see the note in
+ * `src/services/env.ts`. RevenueCat sends this exact string in
+ * `event.entitlement_ids`, and the check below drops any event that does not
+ * name it. A slug here means every real purchase is filed as
+ * `other_entitlement`, `is_pro` never flips, and the subscriber is refused at
+ * scan 11 with nothing in the logs that looks like an error.
+ */
+const ENTITLEMENT = Deno.env.get('REVENUECAT_ENTITLEMENT') ?? 'CarDex Pro';
 
 /**
  * Events that mean "Pro is on".
