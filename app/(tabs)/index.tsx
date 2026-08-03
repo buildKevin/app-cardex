@@ -120,7 +120,7 @@ export default function Garage() {
           No scan counter on purpose — a countdown reads as a warning. */}
       <View style={styles.dock} pointerEvents="box-none">
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Scrim height="100%" strength={1} bands={10} />
+          <Scrim height="100%" strength={1} />
         </View>
         <Button
           label="Scanner une voiture"
