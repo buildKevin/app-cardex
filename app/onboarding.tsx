@@ -77,6 +77,12 @@ import { colors, fonts, gutter, motion, radii, spacing, type, withAlpha } from '
  *   photo-less card can never be turned into a sticker, so it would be the one
  *   card in the garage with a permanently dead button on it.
  *
+ * There is one way past all of it, on the first step: a player who already has an
+ * account jumps straight to the sign-in, because the three questions exist to
+ * build a first card for somebody who has none. A reinstall answering them again
+ * before it can reach a sign-in button is a player locked out of their own
+ * garage, and it is their garage the screen then waits for instead of a sticker.
+ *
  * The car is *declared*, not identified: no vision call happens here and no scan
  * is charged. `addScan` is still what creates it, because it owns the catalogue
  * resolution every other card goes through — a "my car" that resolved its brand
@@ -121,6 +127,17 @@ const OPENING: Line[] = [
 const ACCOUNT_GATE =
   'Il me faut juste *un compte* pour la garder au chaud — sinon elle disparaît avec l’appli.';
 
+/**
+ * Said to a player who already has an account, on the way straight to the
+ * sign-in. The three questions exist to hand a new player their first card; a
+ * returning one already owns a garage, and asking them to declare a car they
+ * declared months ago before letting them near a sign-in button is a wall.
+ */
+const RETURNING = [
+  'Ah, un habitué.',
+  'Connecte-toi et je te *rends ton garage* — les questions, tu y as déjà répondu.',
+];
+
 /** Why a generation did not happen, in the app's own voice. Never a dead end. */
 const STICKER_EXCUSE: Record<string, string> = {
   limit: 'Ton sticker offert est déjà passé — mais ta voiture, elle, est bien dans ton garage.',
@@ -155,6 +172,31 @@ function resolveDeclared(make: string, model: string) {
  */
 function plain(value: string): string {
   return value.replace(/\*/g, '').trim();
+}
+
+/**
+ * What the payoff says when there is no card to show.
+ *
+ * Counting the restored cars out loud is the point of the first case: "ton
+ * garage est prêt" over an empty silhouette is exactly what a *failed* restore
+ * would also look like, and the returning player has no other way to tell.
+ *
+ * Which is also why the empty case is split. A player who told us they already
+ * have an account and got nothing back has almost always signed in with the
+ * other provider — the garage is on the Apple id and they tapped Google — and
+ * that is a fixable mistake if we say so instead of showing them an empty room.
+ */
+function emptyPayoffCopy(returning: boolean, restored: number, name: string): string {
+  if (restored === 1) {
+    return 'Content de te revoir. Ta voiture t’attend dans le garage, et la rue en a d’autres.';
+  }
+  if (restored > 1) {
+    return `Content de te revoir. Tes ${restored} voitures t’attendent dans le garage, et la rue en a d’autres.`;
+  }
+  if (returning) {
+    return 'Je n’ai rien trouvé sur ce compte. Si ton garage est sur un autre, déconnecte-toi depuis ton profil et reconnecte-toi avec celui-là.';
+  }
+  return `À toi de jouer, ${name || 'collectionneur'}. Cadre une voiture dans la rue et elle rejoint ton garage.`;
 }
 
 export default function Onboarding() {
@@ -192,6 +234,14 @@ export default function Onboarding() {
    * indistinguishable from the feature simply not working.
    */
   const [excuse, setExcuse] = useState<string | null>(null);
+  /**
+   * The player took the "already have an account" door. It changes what there is
+   * to wait for — a garage to pull rather than a sticker to draw — and what the
+   * payoff is allowed to claim.
+   */
+  const [returning, setReturning] = useState(false);
+  /** Cars actually pulled back, so the payoff can count them instead of guessing. */
+  const [restored, setRestored] = useState(0);
 
   // Synchronous, so the Apple button is there on the first paint of the sign-in
   // step rather than appearing a frame late — see the note on it in `auth.ts`.
@@ -254,6 +304,22 @@ export default function Onboarding() {
     reply(value);
     say(`Enchanté *${value}*.`, 'Et toi, *tu roules en quoi* ?');
     advance('brand');
+  };
+
+  /**
+   * The way past the three questions, for someone who has answered them before.
+   *
+   * Goes straight to the same sign-in step the conversation ends on — there is
+   * only one, and a second set of buttons somewhere else would be a second thing
+   * to keep working. No card is declared, so `build` finds nothing to draw and
+   * waits on the garage instead.
+   */
+  const chooseReturning = () => {
+    setReturning(true);
+    reply('J’ai déjà un compte');
+    say(...RETURNING);
+    advance('auth');
+    track(events.onboardingReturningChosen);
   };
 
   const chooseBrand = (picked: Brand | null, label: string) => {
@@ -402,24 +468,37 @@ export default function Onboarding() {
       }
     }
 
-    // Only now, and never awaited: `restoreGarage` pushes everything unsynced,
-    // so starting it before `markSynced` would race our own insert and hand a
-    // returning player two copies of the car they just declared.
-    restoreGarage(account.id)
-      .then(({ pulled, pushed }) => track(events.garageRestored, { pulled, pushed }))
-      .catch((error) => captureError(error, { stage: 'restore_garage' }));
+    // Started only now: `restoreGarage` pushes everything unsynced, so kicking it
+    // off before `markSynced` would race our own insert and hand a returning
+    // player two copies of the car they just declared.
+    const restore = restoreGarage(account.id)
+      .then((result) => {
+        track(events.garageRestored, result);
+        return result;
+      })
+      .catch((error) => {
+        captureError(error, { stage: 'restore_garage' });
+        return null;
+      });
+
+    // With no card to draw there is nothing else coming, and the payoff is about
+    // to tell the player their garage is back — so this is the one path that
+    // waits for it. Behind a card, the sticker call is the wait and the restore
+    // rides along inside it.
+    if (!created) {
+      const result = await restore;
+      setRestored(result?.pulled ?? 0);
+      setStep('done');
+      return;
+    }
 
     // The allowance is deliberately *not* pre-checked here. `begin_restyle()`
     // owns it and refuses before the image call, so asking costs a round trip and
     // never a generation — whereas `restylesLeft` is a per-device mirror that
     // knows nothing about the account that signed in three lines ago. It is the
     // wrong authority at exactly the moment the account is new.
-    if (!created || !restyleAvailable || !remoteId) {
-      if (created && !restyleAvailable) {
-        setExcuse(STICKER_EXCUSE.unconfigured);
-      } else if (created) {
-        setExcuse(STICKER_EXCUSE.not_synced);
-      }
+    if (!restyleAvailable || !remoteId) {
+      setExcuse(restyleAvailable ? STICKER_EXCUSE.not_synced : STICKER_EXCUSE.unconfigured);
       setStep('done');
       return;
     }
@@ -498,6 +577,9 @@ export default function Onboarding() {
       car_id: car?.id ?? null,
       matched: car != null,
       has_photo: photoUri != null,
+      // A reinstall completing onboarding is not an acquisition, and averaging the
+      // two hides both.
+      returning,
     });
 
     // The account is made and onboarding is over; whatever happens to the card
@@ -547,6 +629,14 @@ export default function Onboarding() {
     const sticker = Boolean(entry && isSticker(entry, photo));
     const accent = entry ? rarityColor(entry.rarity) : colors.accent;
 
+    const overline = entry
+      ? 'Ta première carte'
+      : restored > 0
+        ? 'Ton garage est revenu'
+        : returning
+          ? 'Rien à récupérer'
+          : 'Ton garage est prêt';
+
     /**
      * Leaves through the door. `armGarageDoor` has to fire before the paywall,
      * not after it: this screen is gone by the time the garage mounts, so the
@@ -569,7 +659,7 @@ export default function Onboarding() {
 
         <Animated.View entering={FadeIn.duration(motion.base)}>
           <Text variant="overline" tone="tertiary" uppercase center>
-            {entry ? 'Ta première carte' : 'Ton garage est prêt'}
+            {overline}
           </Text>
         </Animated.View>
 
@@ -631,7 +721,7 @@ export default function Onboarding() {
           <Text variant="body" tone="secondary" center>
             {entry
               ? `Elle est à toi, ${name || 'collectionneur'}. Maintenant chaque voiture que tu croises dans la rue peut rejoindre celle-là.`
-              : `À toi de jouer, ${name || 'collectionneur'}. Cadre une voiture dans la rue et elle rejoint ton garage.`}
+              : emptyPayoffCopy(returning, restored, name)}
           </Text>
         </Animated.View>
 
@@ -666,18 +756,36 @@ export default function Onboarding() {
           <Bubble key={line.id} line={line} />
         ))}
 
-        {step === 'working' ? <Working /> : null}
+        {step === 'working' ? (
+          <Working label={returning ? 'Je récupère ton garage…' : 'Je dessine ta voiture…'} />
+        ) : null}
       </ScrollView>
 
       <View style={[styles.dock, { paddingBottom: insets.bottom + spacing.lg }]}>
         {step === 'name' ? (
-          <FreeText
-            value={name}
-            onChange={setName}
-            onSubmit={submitName}
-            placeholder="Ton prénom"
-            maxLength={22}
-          />
+          <>
+            <FreeText
+              value={name}
+              onChange={setName}
+              onSubmit={submitName}
+              placeholder="Ton prénom"
+              maxLength={22}
+            />
+
+            {/* The returning player's door, and it has to be on the very first
+                step: the questions build a card for someone who does not have one
+                yet, and a reinstall that has to answer all three before it can
+                reach a sign-in button is a player locked out of their own garage.
+                Ghost and set apart, because for everyone else it is not the
+                answer to the question on screen. */}
+            <Button
+              label="J’ai déjà un compte"
+              variant="ghost"
+              size="md"
+              onPress={chooseReturning}
+              style={styles.skip}
+            />
+          </>
         ) : null}
 
         {step === 'brand' ? (
@@ -840,10 +948,11 @@ function Bubble({ line }: { line: Line }) {
 }
 
 /**
- * The wait while the image model draws. Half a minute is long enough that a
- * static line reads as a frozen app — the same slow breathing as the scanner.
+ * The wait, whatever is being waited on — the image model drawing, or a garage
+ * coming back down the wire. Half a minute is long enough that a static line
+ * reads as a frozen app, hence the same slow breathing as the scanner.
  */
-function Working() {
+function Working({ label }: { label: string }) {
   const pulse = useSharedValue(0);
 
   useEffect(() => {
@@ -863,7 +972,7 @@ function Working() {
     >
       <Animated.View style={style}>
         <Text variant="body" tone="secondary">
-          Je dessine ta voiture…
+          {label}
         </Text>
       </Animated.View>
     </Animated.View>

@@ -123,6 +123,13 @@ export const events = {
    * every `matched: false` here is a car our players own and we cannot name.
    */
   onboardingCarDeclared: 'onboarding_car_declared',
+  /**
+   * The player saying they already have an account, which skips the three
+   * questions and goes straight to the sign-in. Worth its own name: an arrival
+   * that is a reinstall is not a new player, and counting the two together makes
+   * every completion rate in the funnel read lower than it is.
+   */
+  onboardingReturningChosen: 'onboarding_returning_chosen',
   onboardingCompleted: 'onboarding_completed',
   signInStarted: 'sign_in_started',
   signInFailed: 'sign_in_failed',

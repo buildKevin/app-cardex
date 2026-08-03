@@ -486,6 +486,9 @@ Deno.serve(async (req) => {
   telemetry.capture('restyle_delivered', {
     provider: PROVIDER,
     model: PROVIDER === 'gemini' ? GEMINI_MODEL : OPENAI_MODEL,
+    // Meaningless for Gemini, but a high/medium side-by-side is only a
+    // side-by-side if each delivery says which one it was.
+    quality: PROVIDER === 'openai' ? OPENAI_QUALITY : null,
     duration_ms: renderMs,
     source_bytes: original.length,
     output_bytes: outcome.bytes.length,
