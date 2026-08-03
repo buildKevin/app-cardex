@@ -13,6 +13,7 @@ import { RarityBreakdown } from '../../src/components/RarityBreakdown';
 import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { StatBlock } from '../../src/components/StatBlock';
+import { TabSwipe } from '../../src/components/TabSwipe';
 import { TabSwitcher } from '../../src/components/TabSwitcher';
 import { Text } from '../../src/components/Text';
 import { BRANDS } from '../../src/data/brands';
@@ -38,7 +39,7 @@ export default function Garage() {
   );
 
   return (
-    <View style={styles.root}>
+    <TabSwipe>
       <Screen scroll>
         {/* The switcher is this screen's title: no <Text variant="display">
             above it, or the word Garage appears twice in 60pt of each other. */}
@@ -121,15 +122,11 @@ export default function Garage() {
           </View>
         ) : null}
       </Screen>
-    </View>
+    </TabSwipe>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
   block: {
     marginTop: spacing.xxl,
   },

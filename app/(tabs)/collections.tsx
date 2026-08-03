@@ -6,6 +6,7 @@ import { BrandRow } from '../../src/components/BrandRow';
 import { ChipRow, type Chip } from '../../src/components/ChipRow';
 import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
+import { TabSwipe } from '../../src/components/TabSwipe';
 import { TabSwitcher } from '../../src/components/TabSwitcher';
 import { Text } from '../../src/components/Text';
 import { BRANDS } from '../../src/data/brands';
@@ -50,53 +51,56 @@ export default function Collections() {
   });
 
   return (
-    <Screen scroll>
-      <TabSwitcher />
+    <TabSwipe>
+      <Screen scroll>
+        <TabSwitcher />
 
-      <Text variant="body" tone="secondary" style={styles.intro}>
-        Cinq voitures par marque. Débloque les cinq pour obtenir le badge.
-      </Text>
+        <Text variant="body" tone="secondary" style={styles.intro}>
+          Cinq voitures par marque. Débloque les cinq pour obtenir le badge.
+        </Text>
 
-      <View style={styles.filters}>
-        <ChipRow chips={FILTERS} value={filter} onChange={setFilter} />
-      </View>
+        <View style={styles.filters}>
+          <ChipRow chips={FILTERS} value={filter} onChange={setFilter} />
+        </View>
 
-      <View style={styles.list}>
-        <SectionHeader
-          title="Marques"
-          trailing={`${stats.completedBrands} / ${BRANDS.length} complètes`}
-        />
+        <View style={styles.list}>
+          <SectionHeader
+            title="Marques"
+            trailing={`${stats.completedBrands} / ${BRANDS.length} complètes`}
+          />
 
-        {shown.length === 0 ? (
-          <Text variant="body" tone="tertiary">
-            {EMPTY[filter]}
-          </Text>
-        ) : (
-          <View style={styles.rows}>
-            {shown.map((brand) => (
-              <BrandRow
-                key={brand.id}
-                brand={brand}
-                progress={stats.brands[brand.id]}
-                onPress={() => {
-                  // Which brands players actually open, against how far along they
-                  // are. A brand nobody opens at 0/5 is a brand nobody is chasing.
-                  track(events.collectionOpened, {
-                    brand_id: brand.id,
-                    make: brand.name,
-                    owned: stats.brands[brand.id].owned,
-                    total: stats.brands[brand.id].total,
-                    complete: stats.brands[brand.id].complete,
-                    source: 'list',
-                  });
-                  router.push(`/collection/${brand.id}`);
-                }}
-              />
-            ))}
-          </View>
-        )}
-      </View>
-    </Screen>
+          {shown.length === 0 ? (
+            <Text variant="body" tone="tertiary">
+              {EMPTY[filter]}
+            </Text>
+          ) : (
+            <View style={styles.rows}>
+              {shown.map((brand) => (
+                <BrandRow
+                  key={brand.id}
+                  brand={brand}
+                  progress={stats.brands[brand.id]}
+                  onPress={() => {
+                    // Which brands players actually open, against how far along
+                    // they are. A brand nobody opens at 0/5 is a brand nobody is
+                    // chasing.
+                    track(events.collectionOpened, {
+                      brand_id: brand.id,
+                      make: brand.name,
+                      owned: stats.brands[brand.id].owned,
+                      total: stats.brands[brand.id].total,
+                      complete: stats.brands[brand.id].complete,
+                      source: 'list',
+                    });
+                    router.push(`/collection/${brand.id}`);
+                  }}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </Screen>
+    </TabSwipe>
   );
 }
 
