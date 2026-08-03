@@ -153,8 +153,13 @@ chaque funnel existant en deux.
 - **Guideline 5.2.5.** 125 voitures de marques réelles livrées comme assets de
   l'app, c'est une surface plus large que les logos que `npm run verify:release`
   signale déjà. Pas bloquant, mais à décider les yeux ouverts.
-- **Le coût unitaire réel** de la génération n'a pas encore été mesuré. La
-  télémétrie serveur enregistre la latence et les octets, pas le prix. À relever
-  sur la facture OpenAI après les premières générations, pour chiffrer les 125.
+- ~~**Le coût unitaire réel** de la génération n'a pas encore été mesuré.~~
+  Chiffré depuis, dans [`COSTS.md`](COSTS.md) : **0,133 $** par sticker en
+  `quality: high` à 1024², soit ~17 $ pour les 125 du catalogue, et ~0,19 $ pour
+  un free user sur toute sa vie. La télémétrie serveur ne le mesure toujours pas
+  (`restyle_delivered` remonte des octets, pas les tokens de `usage`) — c'est la
+  première étape de `COSTS.md`. Ce document traite aussi la voie que celui-ci
+  n'envisage pas : le **détourage sur l'appareil**, qui est la bonne réponse au
+  point 4 ci-dessus, les voitures hors catalogue.
 - **La couleur canonique** : acceptée ci-dessus, à rouvrir si les retours
   joueurs portent là-dessus.
