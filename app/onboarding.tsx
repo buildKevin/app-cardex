@@ -172,7 +172,7 @@ export default function Onboarding() {
         renderItem={({ item, index }) => (
           <View style={[styles.slide, { paddingTop: insets.top + spacing.xxxl }]}>
             <Animated.View entering={FadeIn.delay(120).duration(motion.slow)} style={styles.art}>
-              <CarSilhouette width={width * 0.62} color={index === 0 ? '#18181E' : '#141419'} />
+              <CarSilhouette width={width * 0.62} color={colors.silhouette} />
             </Animated.View>
 
             <View style={styles.copy}>
@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: colors.track,
   },
   dotActive: {
     backgroundColor: colors.text,

@@ -2,7 +2,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { BRANDS } from '../data/brands';
 import type { BrandProgress } from '../lib/stats';
-import { colors, radii, spacing } from '../theme';
+import { colors, radii, spacing, withAlpha } from '../theme';
 import { BrandLogo } from './BrandLogo';
 import { Text } from './Text';
 
@@ -83,14 +83,11 @@ const styles = StyleSheet.create({
     flex: 1,
     aspectRatio: 1,
     borderRadius: radii.md,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tileComplete: {
-    borderColor: colors.borderStrong,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: withAlpha(colors.text, 0.1),
   },
 });

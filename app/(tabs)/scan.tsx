@@ -20,7 +20,7 @@ import { preparePhoto } from '../../src/services/photo';
 import { VisionError, identifyCar, visionMode } from '../../src/services/vision';
 import { pushEntry } from '../../src/services/sync';
 import { useGameStore, useScansLeft } from '../../src/store/useGameStore';
-import { colors, gutter, motion, radii, spacing } from '../../src/theme';
+import { colors, gutter, motion, radii, spacing, withAlpha } from '../../src/theme';
 
 type Phase = 'idle' | 'working' | 'error';
 
@@ -233,12 +233,12 @@ export default function Scan() {
         <View style={[styles.bottom, { paddingBottom: insets.bottom + spacing.lg }]}>
           {phase === 'working' ? (
             <Animated.View entering={FadeIn.duration(motion.fast)}>
-              <Text variant="bodyMedium" center>
+              <Text variant="bodyMedium" color={colors.textInverted} center>
                 Identification…
               </Text>
             </Animated.View>
           ) : (
-            <Text variant="body" tone="secondary" center>
+            <Text variant="body" color={withAlpha(colors.textInverted, 0.75)} center>
               {error ?? 'Cadre la voiture entière, puis appuie.'}
             </Text>
           )}
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 26,
     height: 26,
-    borderColor: 'rgba(255,255,255,0.85)',
+    borderColor: withAlpha(colors.textInverted, 0.85),
   },
   tl: { top: 0, left: 0, borderTopWidth: 2, borderLeftWidth: 2, borderTopLeftRadius: 6 },
   tr: { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2, borderTopRightRadius: 6 },
@@ -307,13 +307,13 @@ const styles = StyleSheet.create({
     right: 0,
     top: '50%',
     height: 1,
-    backgroundColor: colors.text,
+    backgroundColor: colors.textInverted,
   },
   bottom: {
     paddingHorizontal: gutter,
     gap: spacing.xl,
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.overlay,
     paddingTop: spacing.xl,
   },
   shutterHit: {
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
     height: 74,
     borderRadius: radii.pill,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.7)',
+    borderColor: withAlpha(colors.textInverted, 0.7),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -335,6 +335,6 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: radii.pill,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.textInverted,
   },
 });

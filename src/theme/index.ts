@@ -1,33 +1,48 @@
 import { Dimensions } from 'react-native';
 
 /**
- * Design tokens — dark only, black canvas, almost no colour.
- * Reference: Trade Republic / Linear / Arc.
+ * Design tokens — light only, white canvas, almost no colour.
+ *
+ * The canvas used to be black. Depth now comes from a soft fill and a shadow
+ * rather than from a hairline on near-black, which is why `shadow` exists:
+ * on white, a border alone reads as a wireframe.
  */
 
 export const colors = {
-  bg: '#000000',
-  /** Cards sitting on the canvas. */
-  surface: '#0B0B0D',
-  /** Cards sitting on a card, or pressed state. */
-  surfaceElevated: '#141417',
-  border: 'rgba(255, 255, 255, 0.07)',
-  borderStrong: 'rgba(255, 255, 255, 0.14)',
+  bg: '#FFFFFF',
+  /** Soft grey fill: chips, stat tiles, the plate a photo sits on. */
+  surface: '#F4F4F6',
+  /** One step further from the canvas — a plate sitting on a surface, or a
+      pressed state. Darker than `surface`, not lighter: the canvas is white
+      now, so "more contrast" means more ink. */
+  surfaceElevated: '#E9E9EE',
+  border: 'rgba(10, 10, 12, 0.06)',
+  borderStrong: 'rgba(10, 10, 12, 0.12)',
 
-  text: '#FFFFFF',
-  textSecondary: 'rgba(255, 255, 255, 0.56)',
-  textTertiary: 'rgba(255, 255, 255, 0.30)',
-  textInverted: '#000000',
+  text: '#0A0A0C',
+  textSecondary: 'rgba(10, 10, 12, 0.55)',
+  textTertiary: 'rgba(10, 10, 12, 0.34)',
+  textInverted: '#FFFFFF',
 
-  /** The only real accent: a white primary action on black. */
-  accent: '#FFFFFF',
-  danger: '#FF453A',
+  /** Empty half of a progress track. */
+  track: 'rgba(10, 10, 12, 0.07)',
+  /** A dark plate laid over a photograph so `textInverted` stays readable on
+      it. Stays dark whatever the canvas does — the photo is not the canvas. */
+  overlay: 'rgba(0, 0, 0, 0.55)',
+  /** The car outline drawn wherever there is no photo yet. */
+  silhouette: '#E4E4E8',
 
+  /** The only real accent: a black primary action on white. */
+  accent: '#0A0A0C',
+  danger: '#E5342A',
+
+  /** Darkened from their dark-canvas values — a tier has to be legible as
+      label text on white, not just as a filled dot. */
   rarity: {
-    common: '#8E8E93',
-    rare: '#5B8DEF',
-    epic: '#A472F0',
-    legendary: '#E0B15C',
+    common: '#82828A',
+    rare: '#3D6FD6',
+    epic: '#8B4FD8',
+    legendary: '#B0801F',
   },
 } as const;
 
@@ -49,6 +64,31 @@ export const radii = {
   lg: 20,
   xl: 28,
   pill: 999,
+} as const;
+
+/**
+ * Elevation, in two steps only.
+ *
+ * Spread rather than referenced (`...shadow.card`) so a style stays one flat
+ * object — RN reads the four iOS keys and `elevation` independently.
+ */
+export const shadow = {
+  /** Anything resting on the canvas: cards, tiles, chips. */
+  card: {
+    shadowColor: '#0A0A0C',
+    shadowOpacity: 0.07,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  /** Anything floating over scrolling content. */
+  raised: {
+    shadowColor: '#0A0A0C',
+    shadowOpacity: 0.14,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
 } as const;
 
 export const spacing = {
@@ -89,6 +129,9 @@ export const type = {
   bodyMedium: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 21, letterSpacing: -0.1 },
   label: { fontFamily: fonts.medium, fontSize: 13, lineHeight: 17, letterSpacing: -0.05 },
   caption: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 16, letterSpacing: 0 },
+  /** An emoji standing in for an icon. Sized a little above the label beside
+      it, the way the system draws them in a tab bar. */
+  emoji: { fontFamily: fonts.regular, fontSize: 18, lineHeight: 22, letterSpacing: 0 },
   /** Small all-caps eyebrow above a section. */
   overline: { fontFamily: fonts.medium, fontSize: 11, lineHeight: 14, letterSpacing: 0.8 },
   /** Big numbers in stat blocks. */

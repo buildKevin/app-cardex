@@ -1,12 +1,12 @@
 import { Image } from 'expo-image';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { getCar } from '../data/cars';
 import type { GarageEntry } from '../data/types';
 import { displayPhoto } from '../lib/photo';
-import { rarityColor } from '../lib/rarity';
-import { colors, spacing } from '../theme';
-import { Card } from './Card';
+import { RARITY_ORDER, rarityColor } from '../lib/rarity';
+import { colors, motion, radii, shadow, spacing } from '../theme';
 import { CarSilhouette } from './CarSilhouette';
 import { Text } from './Text';
 
@@ -15,59 +15,106 @@ interface CarTileProps {
   onPress?: () => void;
 }
 
-/** Grid cell for the garage. Photo on top, two lines of text underneath. */
+/**
+ * Grid cell for the garage: the photo as a rounded plate, the name loose on the
+ * canvas underneath.
+ *
+ * Not a `Card`. Boxing three of these per row draws nine outlines on one screen
+ * and the grid stops reading as a set of objects — the photo *is* the object,
+ * and the shadow is all the container it needs.
+ */
 export function CarTile({ entry, onPress }: CarTileProps) {
+  const pressed = useSharedValue(0);
+
   const car = getCar(entry.carId);
-  const accent = rarityColor(entry.rarity);
   const photo = displayPhoto(entry);
+  // Only the top two tiers get a marker. A dot on every tile is a dot that says
+  // nothing, and common is the default state of a garage.
+  const standout = RARITY_ORDER.indexOf(entry.rarity) >= 2;
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 - pressed.value * 0.03 }],
+  }));
 
   return (
-    <Card onPress={onPress} padded={false}>
-      <View style={styles.media}>
-        {photo ? (
-          <Image source={{ uri: photo }} style={styles.image} contentFit="cover" transition={220} />
-        ) : (
-          <CarSilhouette width={110} color="#22222A" />
-        )}
-        <View style={[styles.rarityBar, { backgroundColor: accent }]} />
-      </View>
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => {
+        pressed.value = withTiming(1, { duration: motion.fast });
+      }}
+      onPressOut={() => {
+        pressed.value = withTiming(0, { duration: motion.base });
+      }}
+    >
+      <Animated.View style={animatedStyle}>
+        <View style={styles.plate}>
+          <View style={styles.clip}>
+            {photo ? (
+              <Image
+                source={{ uri: photo }}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                transition={220}
+              />
+            ) : (
+              <CarSilhouette width={72} />
+            )}
+          </View>
 
-      <View style={styles.body}>
-        <Text variant="caption" tone="secondary" numberOfLines={1}>
-          {entry.make}
-        </Text>
-        <Text variant="bodyMedium" numberOfLines={1}>
-          {entry.model}
-        </Text>
-        {car ? (
-          <Text variant="caption" tone="tertiary" numberOfLines={1}>
-            {car.power} ch
+          {standout ? (
+            <View style={styles.badge}>
+              <View style={[styles.dot, { backgroundColor: rarityColor(entry.rarity) }]} />
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.body}>
+          <Text variant="label" numberOfLines={1}>
+            {entry.model}
           </Text>
-        ) : null}
-      </View>
-    </Card>
+          <Text variant="caption" tone="tertiary" numberOfLines={1}>
+            {car ? `${entry.make} · ${car.power} ch` : entry.make}
+          </Text>
+        </View>
+      </Animated.View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  media: {
-    aspectRatio: 4 / 3,
-    backgroundColor: colors.surfaceElevated,
+  plate: {
+    aspectRatio: 1,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
+    ...shadow.card,
+  },
+  // Same reason as `Card`: clipping on the plate itself would eat its shadow.
+  clip: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  image: {
-    ...StyleSheet.absoluteFill,
-  },
-  rarityBar: {
+  badge: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 2,
+    left: -3,
+    bottom: -3,
+    width: 20,
+    height: 20,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.card,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: radii.pill,
   },
   body: {
-    padding: spacing.md,
+    marginTop: spacing.sm,
     gap: 1,
   },
 });

@@ -1,5 +1,7 @@
 import Svg, { Circle, Path } from 'react-native-svg';
 
+import { colors } from '../theme';
+
 interface CarSilhouetteProps {
   width?: number;
   color?: string;
@@ -10,7 +12,11 @@ interface CarSilhouetteProps {
  * Anonymous car side-view. Used for every locked collection slot so the player
  * cannot tell which cars are still missing.
  */
-export function CarSilhouette({ width = 120, color = '#1C1C21', opacity = 1 }: CarSilhouetteProps) {
+export function CarSilhouette({
+  width = 120,
+  color = colors.silhouette,
+  opacity = 1,
+}: CarSilhouetteProps) {
   const height = (width * 44) / 120;
 
   return (

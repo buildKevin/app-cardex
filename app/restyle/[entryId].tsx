@@ -185,7 +185,7 @@ export default function Restyle() {
           <Image source={{ uri: preview }} style={styles.image} contentFit="cover" transition={260} />
         ) : (
           <View style={styles.placeholder}>
-            <CarSilhouette width={180} color="#22222A" />
+            <CarSilhouette width={180} color={colors.silhouette} />
           </View>
         )}
 
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { colors, motion, radii, spacing } from '../theme';
+import { colors, motion, radii, shadow, spacing } from '../theme';
 
 interface CardProps {
   children: ReactNode;
@@ -11,7 +11,14 @@ interface CardProps {
   style?: ViewStyle;
 }
 
-/** The one container in the app: near-black surface, hairline border, soft radius. */
+/**
+ * The one container in the app: white, lifted off the canvas by a shadow.
+ *
+ * Two nested views on purpose. `overflow: 'hidden'` sets `clipsToBounds`, which
+ * on iOS clips the view's *own* shadow as well as its children — so the outer
+ * view carries the shadow and the inner one does the clipping that keeps a
+ * full-bleed photo inside the radius.
+ */
 export function Card({ children, onPress, padded = true, style }: CardProps) {
   const pressed = useSharedValue(0);
 
@@ -20,9 +27,9 @@ export function Card({ children, onPress, padded = true, style }: CardProps) {
     opacity: 1 - pressed.value * 0.25,
   }));
 
-  const content = [styles.card, padded && styles.padded, style];
+  const body = <View style={[styles.clip, padded && styles.padded]}>{children}</View>;
 
-  if (!onPress) return <View style={content}>{children}</View>;
+  if (!onPress) return <View style={[styles.card, style]}>{body}</View>;
 
   return (
     <Pressable
@@ -34,17 +41,21 @@ export function Card({ children, onPress, padded = true, style }: CardProps) {
         pressed.value = withTiming(0, { duration: motion.base });
       }}
     >
-      <Animated.View style={[content, animatedStyle]}>{children}</Animated.View>
+      <Animated.View style={[styles.card, style, animatedStyle]}>{body}</Animated.View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bg,
     borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    // No border. On white a hairline plus a shadow reads as two outlines, and
+    // the shadow is the one doing the work.
+    ...shadow.card,
+  },
+  clip: {
+    borderRadius: radii.lg,
     overflow: 'hidden',
   },
   padded: {

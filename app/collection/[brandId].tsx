@@ -114,7 +114,7 @@ export default function BrandCollection() {
                   }
                 >
                   <View style={styles.locked}>
-                    <CarSilhouette width={104} color="#1A1A20" />
+                    <CarSilhouette width={104} color={colors.silhouette} />
                   </View>
                   <Text variant="caption" tone="tertiary">
                     Slot {String(index + 1).padStart(2, '0')}
@@ -138,7 +138,7 @@ export default function BrandCollection() {
                   {photo ? (
                     <Image source={{ uri: photo }} style={styles.photo} contentFit="cover" />
                   ) : (
-                    <CarSilhouette width={104} color="#2A2A33" />
+                    <CarSilhouette width={104} color={colors.silhouette} />
                   )}
                 </View>
                 <Text variant="caption" tone="tertiary">
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   locked: {
     aspectRatio: 4 / 3,
     borderRadius: radii.lg,
-    backgroundColor: '#0A0A0C',
+    backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     alignItems: 'center',

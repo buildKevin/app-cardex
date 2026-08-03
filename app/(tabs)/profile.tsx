@@ -25,6 +25,7 @@ import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { SettingsGroup } from '../../src/components/SettingsGroup';
 import { SettingsRow } from '../../src/components/SettingsRow';
+import { TabSwitcher } from '../../src/components/TabSwitcher';
 import { Text } from '../../src/components/Text';
 import { badgeStates, rankBadges, unlockedBadgeCount } from '../../src/data/badges';
 import { formatDiscoveredAt, formatNumber } from '../../src/lib/format';
@@ -404,7 +405,9 @@ export default function Profile() {
 
   return (
     <Screen scroll>
-      <Text variant="display">Profil</Text>
+      {/* Same header as the two sections, with the profile glyph filled in —
+          the identity card below says whose profile this is. */}
+      <TabSwitcher />
 
       <Card style={styles.identity}>
         <View style={styles.identityRow}>
@@ -491,11 +494,13 @@ export default function Profile() {
                   <Image source={{ uri: photo }} style={styles.slotImage} contentFit="cover" />
                 ) : (
                   <View style={styles.slotPlaceholder}>
-                    <CarSilhouette width={70} color="#26262E" />
+                    <CarSilhouette width={70} color={colors.silhouette} />
                   </View>
                 )}
                 <View style={styles.slotLabel}>
-                  <Text variant="caption" numberOfLines={1}>
+                  {/* Inverted, not `primary`: this text sits on the dark plate
+                      over the photo, not on the canvas. */}
+                  <Text variant="caption" color={colors.textInverted} numberOfLines={1}>
                     {entry.model}
                   </Text>
                 </View>
@@ -713,7 +718,8 @@ function Counter({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   identity: {
-    marginTop: spacing.xl,
+    // Nothing: <TabSwitcher> already spaces itself from what follows.
+    marginTop: 0,
   },
   identityRow: {
     flexDirection: 'row',
@@ -810,7 +816,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     padding: spacing.sm,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
   },
   showcaseHint: {
     marginTop: spacing.md,

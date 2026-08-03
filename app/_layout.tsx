@@ -104,7 +104,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         {/* Touch autocapture is the point of running the provider at all: the
             events written by hand answer the questions we already thought of,
             and `$autocapture` answers the ones we did not. `captureScreens` is

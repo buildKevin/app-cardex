@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 
-import { spacing } from '../theme';
+import { colors, spacing } from '../theme';
 import { CarSilhouette } from './CarSilhouette';
 import { Text } from './Text';
 
@@ -12,7 +12,7 @@ interface EmptyStateProps {
 export function EmptyState({ title, subtitle }: EmptyStateProps) {
   return (
     <View style={styles.root}>
-      <CarSilhouette width={140} color="#16161B" />
+      <CarSilhouette width={140} color={colors.silhouette} />
       <View style={styles.copy}>
         <Text variant="headline" tone="secondary" center>
           {title}

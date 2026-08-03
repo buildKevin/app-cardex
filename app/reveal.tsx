@@ -149,7 +149,7 @@ export default function Reveal() {
           {photo ? (
             <Image source={{ uri: photo }} style={styles.image} contentFit="cover" transition={280} />
           ) : (
-            <CarSilhouette width={width * 0.5} color="#24242C" />
+            <CarSilhouette width={width * 0.5} color={colors.silhouette} />
           )}
         </View>
 

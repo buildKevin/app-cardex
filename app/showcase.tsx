@@ -71,7 +71,7 @@ export default function ShowcasePicker() {
                     {photo ? (
                       <Image source={{ uri: photo }} style={styles.image} contentFit="cover" />
                     ) : (
-                      <CarSilhouette width={80} color="#24242C" />
+                      <CarSilhouette width={80} color={colors.silhouette} />
                     )}
 
                     {selected ? (

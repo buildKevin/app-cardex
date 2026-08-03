@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { colors, motion, radii, spacing } from '../theme';
+import { colors, motion, radii, spacing, withAlpha } from '../theme';
 import { Text } from './Text';
 
 type Variant = 'primary' | 'secondary' | 'ghost';
@@ -76,7 +76,7 @@ export function Button({
             {caption ? (
               <Text
                 variant="caption"
-                color={isPrimary ? 'rgba(0,0,0,0.5)' : colors.textTertiary}
+                color={isPrimary ? withAlpha(colors.textInverted, 0.6) : colors.textTertiary}
                 style={styles.caption}
               >
                 {caption}

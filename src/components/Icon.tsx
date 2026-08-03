@@ -7,6 +7,7 @@ export type IconName =
   | 'collections'
   | 'scan'
   | 'profile'
+  | 'account'
   | 'chevron'
   | 'check'
   | 'close'
@@ -44,11 +45,10 @@ export function Icon({ name, size = 24, color = colors.text, strokeWidth = 1.5 }
         </>
       ) : null}
 
+      {/* Four corners and nothing else. The bar across the middle made it a
+          barcode scanner; this is a viewfinder, which is what the camera does. */}
       {name === 'scan' ? (
-        <>
-          <Path d="M4 9V6.4A2.4 2.4 0 0 1 6.4 4H9M15 4h2.6A2.4 2.4 0 0 1 20 6.4V9M20 15v2.6a2.4 2.4 0 0 1-2.4 2.4H15M9 20H6.4A2.4 2.4 0 0 1 4 17.6V15" {...stroke} />
-          <Path d="M7.6 12h8.8" {...stroke} />
-        </>
+        <Path d="M4 9V6.4A2.4 2.4 0 0 1 6.4 4H9M15 4h2.6A2.4 2.4 0 0 1 20 6.4V9M20 15v2.6a2.4 2.4 0 0 1-2.4 2.4H15M9 20H6.4A2.4 2.4 0 0 1 4 17.6V15" {...stroke} />
       ) : null}
 
       {name === 'camera' ? (
@@ -62,6 +62,16 @@ export function Icon({ name, size = 24, color = colors.text, strokeWidth = 1.5 }
         <>
           <Circle cx={12} cy={8.8} r={3.8} {...stroke} />
           <Path d="M5 20a7 7 0 0 1 14 0" {...stroke} />
+        </>
+      ) : null}
+
+      {/* The same bust, inside its own ring — a header glyph that needs no chip
+          drawn behind it to read as a button. */}
+      {name === 'account' ? (
+        <>
+          <Circle cx={12} cy={12} r={9} {...stroke} />
+          <Circle cx={12} cy={10} r={3} {...stroke} />
+          <Path d="M6.9 18.7a5.9 5.9 0 0 1 10.2 0" {...stroke} />
         </>
       ) : null}
 
