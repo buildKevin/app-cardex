@@ -56,8 +56,9 @@ pourquoi de chaque ligne.
 
 **Pages légales — il reste une chose**
 
-- [ ] **A10.** Remplacer `<EMAIL_DE_CONTACT>` dans les trois pages Notion
-      (6 occurrences). Me donner l'adresse et je la substitue dans `docs/legal/`.
+- [x] **A10.** ✅ Les trois pages sont publiées et l'adresse de contact est en
+      place côté Notion. **`docs/legal/` porte encore `<EMAIL_DE_CONTACT>`** :
+      donne-moi l'adresse pour que la source du repo cesse de diverger du rendu.
 
 **Fiche App Store — attention, deux jeux de captures différents**
 
@@ -68,22 +69,24 @@ pourquoi de chaque ligne.
       sandbox de façon fiable.
 - [ ] **A12.** **Captures marketing 6,7″** pour la fiche App Store
       (iPhone 15/16/17 Pro Max). Obligatoires, et sans rapport avec A11.
-- [ ] **A13.** Nom, sous-titre, description, mots-clés, catégorie.
+- [ ] **A13.** Nom, sous-titre, description, mots-clés, catégorie —
+      **rédigés dans `docs/app-store-listing.md`**, il n'y a plus qu'à coller.
 - [ ] **A14.** Classification d'âge — 4+ convient.
 - [ ] **A15.** **App Privacy** : photos/caméra (fonctionnalité, non liée à
       l'identité), identifiants si PostHog est actif. **Ne pas** déclarer de suivi
       publicitaire, il n'y en a pas.
-- [ ] **A16.** Note pour la review : préciser que l'app fonctionne hors compte, et
-      fournir un compte de test.
+- [ ] **A16.** Note pour la review — **rédigée dans `docs/app-store-listing.md`**.
+      Elle contient le point qui compte : le scan est **caméra uniquement**, donc
+      sans instruction explicite un testeur en bureau ne peut pas essayer la
+      fonction principale, et « impossible à vérifier » est un motif de rejet.
 
 **Deux décisions et une vérification à l'œil**
 
 - [ ] **A17.** Les 22 logos constructeurs — voir § 1.1. À trancher avant la review
       publique, pas avant TestFlight interne.
 - [ ] **A18.** Anonymous sign-in sur le projet hébergé — voir § 1.2.
-- [ ] **A19.** `assets/icon.png` et `assets/splash-icon.png` sont **octet pour
-      octet identiques** depuis `87ee9dd` — `verify:release` le signale. Voulu
-      (même marque au lancement) ou remplacement oublié : à trancher à l'œil.
+- [x] **A19.** ✅ `icon.png` et `splash-icon.png` identiques : voulu, même marque
+      au lancement. L'avertissement de `verify:release` est donc attendu.
 
 ### B — Moi, dès que tu me donnes les valeurs
 
