@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
+  FadeOut,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
@@ -16,8 +17,10 @@ import { Button } from '../../src/components/Button';
 import { CarSilhouette } from '../../src/components/CarSilhouette';
 import { Icon } from '../../src/components/Icon';
 import { Screen } from '../../src/components/Screen';
+import { StickerReveal } from '../../src/components/StickerReveal';
 import { Text } from '../../src/components/Text';
 import { displayPhoto, originalPhoto } from '../../src/lib/photo';
+import { rarityColor } from '../../src/lib/rarity';
 import { breadcrumb, captureError, events, track } from '../../src/services/analytics';
 import { persistStyledPhoto } from '../../src/services/photo';
 import { RestyleError, restylePhoto, type RestyleErrorCode } from '../../src/services/restyle';
@@ -26,6 +29,29 @@ import { useGameStore, useGarageEntry, useRestylesLeft } from '../../src/store/u
 import { colors, gutter, motion, radii, spacing } from '../../src/theme';
 
 type Phase = 'idle' | 'working' | 'done';
+
+/**
+ * What the player reads while the model works, one line at a time.
+ *
+ * The generation takes half a minute and a single static caption makes it feel
+ * like a hang. These are written as work on *their* car — jantes, calandre,
+ * capot — because that is what the model is actually being asked to preserve.
+ * The list does not loop: a run that outlives it holds on the last line, since
+ * « Reconstruction des jantes » coming round a second time reads as a stuck
+ * queue, not as progress.
+ */
+const WORKING_STEPS = [
+  "Reste sur cet écran, l'IA travaille…",
+  'Analyse de la photographie…',
+  'Reconstruction des jantes…',
+  'Redessin de la calandre…',
+  'Polissage du capot…',
+  'Teinte de la carrosserie…',
+  'Découpe du contour…',
+  'Pose du vernis…',
+] as const;
+
+const STEP_MS = 4000;
 
 const ERROR_COPY: Record<RestyleErrorCode, string> = {
   limit: 'Tu as utilisé ton sticker gratuit.',
@@ -77,9 +103,10 @@ export default function Restyle() {
 
   // Before: the photograph, which is literally what is about to be redrawn —
   // even on a re-roll, where `displayPhoto` would hand back the old sticker.
-  // After: the new one.
+  // After: the new one, delivered by `StickerReveal` as an explosion rather
+  // than a cross-fade — the player waited half a minute for this frame.
   const done = phase === 'done';
-  const preview = done ? displayPhoto(entry) : originalPhoto(entry);
+  const preview = originalPhoto(entry);
 
   const generate = async () => {
     if (phase === 'working') return;
@@ -139,7 +166,8 @@ export default function Restyle() {
         duration_ms: Date.now() - startedAt,
       });
 
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // No success haptic here: `StickerReveal` fires the heavy impact at the
+      // exact frame the photograph blows apart, and two pulses read as a bug.
       setPhase('done');
     } catch (caught) {
       const code = caught instanceof RestyleError ? caught.code : 'network';
@@ -169,14 +197,18 @@ export default function Restyle() {
   return (
     <Screen scroll bleed>
       <View style={styles.hero}>
-        {preview ? (
-          <Image
-            source={{ uri: preview }}
+        {done ? (
+          // No `overflow: hidden` on the hero: the burst must escape the frame,
+          // and `StickerReveal` clips its images itself.
+          <StickerReveal
+            before={preview}
+            after={displayPhoto(entry)}
+            accent={rarityColor(entry.rarity)}
+            radius={0}
             style={styles.image}
-            // The sticker is die-cut: cropping it to fill would cut the edge off.
-            contentFit={done ? 'contain' : 'cover'}
-            transition={260}
           />
+        ) : preview ? (
+          <Image source={{ uri: preview }} style={styles.image} contentFit="cover" transition={260} />
         ) : (
           <View style={styles.placeholder}>
             <CarSilhouette width={180} />
@@ -196,7 +228,13 @@ export default function Restyle() {
 
       <View style={styles.content}>
         {done ? (
-          <Animated.View entering={FadeIn.duration(motion.base)} style={styles.block}>
+          // Delayed to land with the sticker: `StickerReveal` holds the
+          // photograph for `motion.reveal` before blowing it apart, and copy
+          // announcing the sticker before it exists spoils the explosion.
+          <Animated.View
+            entering={FadeIn.delay(motion.reveal + motion.flash).duration(motion.base)}
+            style={styles.block}
+          >
             <Text variant="overline" tone="tertiary" uppercase>
               Sticker créé
             </Text>
@@ -242,15 +280,44 @@ export default function Restyle() {
               style={styles.cta}
             />
 
-            {phase === 'working' ? (
-              <Text variant="caption" tone="tertiary" center>
-                Reste sur cet écran, l'IA travaille.
-              </Text>
-            ) : null}
+            {phase === 'working' ? <WorkingSteps /> : null}
           </View>
         )}
       </View>
     </Screen>
+  );
+}
+
+/**
+ * One line at a time, advancing on a timer, never looping back.
+ *
+ * The lines swap inside a fixed-height box with each one absolutely centred:
+ * Reanimated keeps the exiting view mounted while it fades, and letting the two
+ * stack in normal flow makes the whole column jump once per step.
+ */
+function WorkingSteps() {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setStep((current) => Math.min(current + 1, WORKING_STEPS.length - 1));
+    }, STEP_MS);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <View style={styles.steps}>
+      <Animated.View
+        key={step}
+        entering={FadeIn.duration(motion.base)}
+        exiting={FadeOut.duration(motion.fast)}
+        style={styles.stepLine}
+      >
+        <Text variant="caption" tone="tertiary" center>
+          {WORKING_STEPS[step]}
+        </Text>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -297,5 +364,14 @@ const styles = StyleSheet.create({
   },
   cta: {
     marginTop: spacing.xl,
+  },
+  steps: {
+    height: spacing.xl,
+    justifyContent: 'center',
+  },
+  stepLine: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
