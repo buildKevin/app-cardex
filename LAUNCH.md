@@ -26,10 +26,12 @@ pourquoi de chaque ligne.
 
 **RevenueCat — l'ordre compte, chaque étape débloque la suivante**
 
-- [ ] **A2.** Ouvrir un des produits Test Store et **lire l'identifiant de son
-      entitlement**. S'il vaut `cardex_pro`, on le réutilise. Sinon, me le dire :
-      soit on renomme, soit je change `EXPO_PUBLIC_REVENUECAT_ENTITLEMENT`.
-      À faire *avant* A5, sinon tout se branche sur du vide sans lever d'erreur.
+- [x] **A2.** ✅ L'identifiant de l'entitlement est littéralement **`CarDex Pro`**,
+      espace et majuscules comprises, et il est immuable — `update-entitlement`
+      n'édite que `display_name`, et créer un `cardex_pro` à côté échoue en 409
+      (unicité vérifiée sur la forme normalisée). Le code a donc été aligné
+      dessus, côté client **et** côté webhook, dans `a6b6c90`. Rien à faire de
+      plus, et surtout **ne pas** rattacher les produits à un autre entitlement.
 - [ ] **A3.** App Store Connect → Utilisateurs et accès → Intégrations → **Achats
       intégrés** → générer une clé `.p8`. **Différente** de `AuthKey_ZNF6FFWLYV.p8`
       qui sert à eas.
@@ -78,15 +80,15 @@ pourquoi de chaque ligne.
 - [ ] **A17.** Les 22 logos constructeurs — voir § 1.1. À trancher avant la review
       publique, pas avant TestFlight interne.
 - [ ] **A18.** Anonymous sign-in sur le projet hébergé — voir § 1.2.
-- [ ] **A19.** Regarder `assets/splash-icon.png` de tes yeux : s'il est resté le
-      gabarit Expo, ça se voit au lancement.
+- [ ] **A19.** `assets/icon.png` et `assets/splash-icon.png` sont **octet pour
+      octet identiques** depuis `87ee9dd` — `verify:release` le signale. Voulu
+      (même marque au lancement) ou remplacement oublié : à trancher à l'œil.
 
 ### B — Moi, dès que tu me donnes les valeurs
 
 - [ ] **B1.** Câbler la clé `appl_…` de A7 dans `eas.json` profil `production`
 - [ ] **B2.** Substituer l'adresse de A10 dans `docs/legal/`
-- [ ] **B3.** Committer la feature restyle, non commitée alors que la fonction est
-      déjà déployée — l'archive actuelle n'est pas reproductible
+- [x] **B3.** ✅ La feature restyle est commitée (`7e87144`), l'arbre est propre
 - [ ] **B4.** `npm run verify:release`, puis build local et upload TestFlight
 
 ### C — À vérifier sur le build réel, avec moi
