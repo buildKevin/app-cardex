@@ -168,6 +168,7 @@ export const events = {
   photoCompared: 'photo_compared',
   collectionOpened: 'collection_opened',
   collectionsOpened: 'collections_opened',
+  collectionsViewChanged: 'collections_view_changed',
   lockedSlotTapped: 'locked_slot_tapped',
 
   // Profile
