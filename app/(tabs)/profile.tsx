@@ -29,7 +29,7 @@ import { TabSwitcher } from '../../src/components/TabSwitcher';
 import { Text } from '../../src/components/Text';
 import { badgeStates, rankBadges, unlockedBadgeCount } from '../../src/data/badges';
 import { formatDiscoveredAt, formatNumber } from '../../src/lib/format';
-import { displayPhoto } from '../../src/lib/photo';
+import { displaySticker, isSticker } from '../../src/lib/photo';
 import { LEGAL, hasLegalLinks } from '../../src/config/release';
 import { captureError, events, resetAnalytics, track } from '../../src/services/analytics';
 import { deleteAccount, signOut } from '../../src/services/auth';
@@ -486,12 +486,16 @@ export default function Profile() {
               );
             }
 
-            const photo = displayPhoto(entry);
+            const photo = displaySticker(entry);
 
             return (
               <Pressable key={entry.id} style={styles.slot} onPress={() => router.push(`/car/${entry.id}`)}>
                 {photo ? (
-                  <Image source={{ uri: photo }} style={styles.slotImage} contentFit="cover" />
+                  <Image
+                    source={{ uri: photo }}
+                    style={styles.slotImage}
+                    contentFit={isSticker(entry, photo) ? 'contain' : 'cover'}
+                  />
                 ) : (
                   <View style={styles.slotPlaceholder}>
                     <CarSilhouette width={70} color={colors.silhouette} />

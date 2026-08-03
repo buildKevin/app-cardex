@@ -70,37 +70,63 @@ Things that already bit us on SDK 57 / RN 0.86:
   the model call (refuse early, never pay for a request we'd reject), then
   `commit_scan()` only if the result matched the catalogue. An uncatalogued car
   is our gap, so it never costs the player a scan.
-- **The photo restyle takes an entry id, never an image.** `restyle-photo` reads
-  the stored photo from the `scans` bucket itself and resolves the backdrop
-  *key* into a prompt server-side. A function that restyled whatever bytes it
-  was handed, on whatever prompt it was given, is an open image generator billed
-  to us — the ownership check on `garage` is what bounds the feature to a
-  player's own cars. The consequence is that an entry must be synced before it
-  can be restyled; the client pushes it first rather than failing.
-- **A restyle never replaces the original.** `photo_path` and
-  `styled_photo_path` both live on the row, and `displayPhoto()` in
+- **`restyle-photo` generates a sticker, and takes an entry id, never an image.**
+  It reads the stored photo from the `scans` bucket itself and builds the prompt
+  server-side. A function that rendered whatever bytes it was handed, on whatever
+  prompt it was given, is an open image generator billed to us — the ownership
+  check on `garage` is what bounds the feature to a player's own cars. The
+  consequence is that an entry must be synced before it can be rendered; the
+  client pushes it first rather than failing. It used to drop the car into one of
+  four scenes; the backdrop keys are gone, and with them the list that was
+  mirrored by hand on the client and could drift from the server's.
+- **A sticker never replaces the photograph, and the two are shown in different
+  places.** `photo_path` and `styled_photo_path` both live on the row, and
   `src/lib/photo.ts` is the single place that decides which one a screen shows —
-  eight screens render an entry's photo, and the first divergence would be a
-  showcase still showing the raw snapshot. The rendering is also copied to disk
-  (`persistStyledPhoto`), because the signed URL expires in a day and that
-  picture is now the entry's face.
-- **Restyle accounting mirrors `begin_scan`/`commit_scan`, and must.** An image
-  call costs 10-40x a vision call, so: refuse before paying, charge only on a
-  stored result, and keep `restyle_calls` as a ceiling so a failing generation
-  cannot be retried forever for free. Free gets **one for the lifetime of the
-  account** — `begin_restyle` deliberately rolls over only Pro's window, because
-  a monthly free rendering means no second click ever reaches the paywall.
-- **The restyle runs on Gemini, not `gpt-image-1`, and the prompt never names
-  the car.** Three mistakes shipped in the first version and all three cost
-  fidelity: `gpt-image-1` regenerates the whole frame on an edit so nothing
-  guarantees the car survives; `quality: low` strips exactly the details that
-  make a car recognisable (wheels, grille, shoulder line); and opening the
-  prompt with "Keep this exact car — Ferrari 488 GTB 2018 —" hands the model a
-  label it will happily draw *its* idea of instead of copying the photograph.
-  The pixels are the specification. Gemini's image models are built for
-  "keep this subject, change the scene" and cost about a quarter of OpenAI at
-  the quality this needs; `IMAGE_PROVIDER` keeps OpenAI reachable for a
-  side-by-side, never as the default.
+  eight screens render an entry's picture, and the first divergence would be a
+  showcase still showing the raw snapshot. `displaySticker()` for grids, the
+  showcase and the collections, because uniformity is the whole effect there;
+  `displayPhoto()` for the garage hero, the fiche and the reveal, which exist to
+  show the moment the player had. `isSticker()` decides `contentFit`: a die-cut
+  sticker cropped with `cover` loses the edge that makes it a sticker. The
+  rendering is also copied to disk (`persistStyledPhoto`), because the signed URL
+  expires in a day and that picture is now the entry's face in every grid.
+- **Sticker accounting mirrors `begin_scan`/`commit_scan`, and must.** An image
+  call costs 10-40x a vision call — more now that it runs on OpenAI at
+  `quality: high` — so: refuse before paying, charge only on a stored result, and
+  keep `restyle_calls` as a ceiling so a failing generation cannot be retried
+  forever for free. Free gets **one for the lifetime of the account** —
+  `begin_restyle` deliberately rolls over only Pro's window, because a monthly
+  free sticker means no second click ever reaches the paywall. The `restyle_`
+  names stay on the RPCs, the column and the PostHog events: renaming a live
+  event splits every existing funnel in two, and it is the same spend against the
+  same paywall it always was.
+- **The prompt never names the car**, and that rule got *more* important, not
+  less, when the feature became a sticker. Two mistakes shipped in the first
+  version and both cost fidelity: `quality: low` strips exactly the details that
+  make a car recognisable (wheels, grille, shoulder line), and opening the prompt
+  with "Keep this exact car — Ferrari 488 GTB 2018 —" hands the model a label it
+  will happily draw *its* idea of instead of copying the photograph. The pixels
+  are the specification, and a redraw is precisely the moment a model would
+  rather draw the car it already knows.
+- **The sticker runs on OpenAI, which reverses the earlier decision because the
+  job changed.** While the job was "keep this photograph, replace the scene",
+  Gemini won and it was not close — `gpt-image-1` regenerates the whole frame on
+  an edit, so nothing guaranteed the car survived, and the first build came back
+  with cars that were no longer the player's. A sticker is an illustration, not a
+  preserved photograph: regenerating the frame is the point, `input_fidelity:
+  'high'` is what keeps the redraw anchored to the pixels, and only the GPT image
+  models expose the alpha channel a die-cut needs (`background: 'transparent'`,
+  which *requires* a png or webp `output_format` — asking for jpeg silently
+  returns an opaque background). `IMAGE_MODEL` must stay on a model that supports
+  `input_fidelity`: `gpt-image-1-mini` does not. Gemini stays reachable behind
+  `IMAGE_PROVIDER` so the app still runs with only that key, but it cannot cut
+  out — it is asked for a flat white background instead, which reads as die-cut
+  on our white canvas and nowhere else.
+- **What makes a grid of stickers read as a collection is in the prompt.** The
+  lighting, the finish and the margin in the frame are pinned so every sticker
+  matches every other one. The viewing angle deliberately is *not* — it stays
+  whatever the player shot, because inventing a three-quarter view means
+  inventing bodywork nobody photographed.
 - **RevenueCat's `CustomerInfo` is the only source of truth for Pro.** The
   `isPro` store flag is a cache so the UI does not flicker on cold start; it is
   written from a `CustomerInfo`, never from a completed transaction. A failed

@@ -1,9 +1,9 @@
 /**
- * restyle-photo — re-shoots a garage photo into a nicer setting.
+ * restyle-photo — turns a garage photo into a die-cut sticker.
  *
  * 1. Authenticates the caller.
  * 2. Resolves the garage row and its stored photo. The request carries an entry
- *    id, never an image: a function that restyled whatever bytes it was handed
+ *    id, never an image: a function that rendered whatever bytes it was handed
  *    would let anyone spend our image budget on anything, and the ownership
  *    check is what bounds the feature to a player's own garage.
  * 3. Enforces the allowance in the database, two-phase — begin_restyle() before
@@ -12,8 +12,13 @@
  * 4. Writes the rendering next to the original in the `scans` bucket and
  *    returns a signed URL.
  *
- * The backdrop is a KEY, resolved to a prompt here. Accepting prompt text from
- * the client would hand an arbitrary image generator to anyone with the app.
+ * The prompt is built here and never travels. Accepting prompt text from the
+ * client would hand an arbitrary image generator to anyone with the app.
+ *
+ * It used to drop the car into a nicer scene, chosen from four backdrop keys.
+ * There is no choice left to make: one sticker, one prompt. The scenes went
+ * because the sticker is what the app collects — see the note on `buildPrompt`
+ * for why a redraw beats a background swap here.
  *
  * Deploy: supabase functions deploy restyle-photo
  * Secrets: supabase secrets set OPENAI_API_KEY=sk-... POSTHOG_KEY=phc_...
@@ -27,32 +32,53 @@ const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 const GEMINI_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 
 /**
- * Gemini first, and it is not a close call.
+ * OpenAI first — the opposite of what this function used to do, because the job
+ * changed.
  *
- * `gpt-image-1` regenerates the whole frame on an edit, so nothing guarantees
- * the car survives it — the first build shipped with it and came back with
- * cars that were no longer the player's car. Gemini's image models are built
- * for "keep this subject, change the scene", and they cost roughly a quarter
- * of what OpenAI charges at the quality this needs. OpenAI stays reachable
- * behind IMAGE_PROVIDER for a side-by-side.
+ * When the job was "keep this photograph, replace the scene", Gemini won and it
+ * was not close: `gpt-image-1` regenerates the whole frame on an edit, so
+ * nothing guaranteed the car survived, and the first build came back with cars
+ * that were no longer the player's car.
+ *
+ * A sticker is not a preserved photograph, it is an illustration. Regenerating
+ * the whole frame is now the point, `input_fidelity: 'high'` is the anchor that
+ * keeps the redraw on the car in front of it, and — decisively — a sticker needs
+ * a real alpha channel, which only the GPT image models expose here
+ * (`background: 'transparent'`). It costs several times what Gemini does per
+ * image; the allowance is what bounds that.
+ *
+ * Gemini stays reachable so the app still works with only that key set, but it
+ * cannot cut out: it gets asked for a flat white background instead. On our
+ * white canvas that reads as die-cut, but there is no alpha to shadow or to
+ * composite on anything else.
  */
 type Provider = 'gemini' | 'openai';
 const PROVIDER: Provider =
   (Deno.env.get('IMAGE_PROVIDER') as Provider | undefined) ??
-  (GEMINI_KEY ? 'gemini' : 'openai');
+  (OPENAI_KEY ? 'openai' : 'gemini');
 
 const GEMINI_MODEL = Deno.env.get('GEMINI_IMAGE_MODEL') ?? 'gemini-3.1-flash-image';
 
-const OPENAI_MODEL = Deno.env.get('IMAGE_MODEL') ?? 'gpt-image-1';
 /**
- * Only used on the OpenAI path. 'low' was a mistake worth recording: the
- * details that make a car recognisable — wheels, grille, shoulder line — are
- * the first thing a low-quality render loses, so saving on the unit cost was
- * paid for in the one property the feature exists to have.
+ * Must be a model that supports `input_fidelity` — `gpt-image-1`, `gpt-image-1.5`
+ * and later. `gpt-image-1-mini` does not, and without that anchor the redraw
+ * stops being the player's car.
  */
-const OPENAI_QUALITY = Deno.env.get('IMAGE_QUALITY') ?? 'medium';
-/** Landscape: a car sits badly in a square. */
-const OPENAI_SIZE = Deno.env.get('IMAGE_SIZE') ?? '1536x1024';
+const OPENAI_MODEL = Deno.env.get('IMAGE_MODEL') ?? 'gpt-image-1.5';
+/**
+ * 'low' was a mistake worth recording: the details that make a car
+ * recognisable — wheels, grille, shoulder line — are the first thing a
+ * low-quality render loses, so saving on the unit cost was paid for in the one
+ * property the feature exists to have. A sticker raises the stakes again: its
+ * edge *is* the object, and a soft edge reads as a bad cutout.
+ */
+const OPENAI_QUALITY = Deno.env.get('IMAGE_QUALITY') ?? 'high';
+/**
+ * Square, unlike the landscape the scenes wanted. A sticker is displayed in a
+ * square grid cell at `contentFit: 'contain'`, and a landscape sticker is a
+ * sticker with air above and below it in every cell.
+ */
+const OPENAI_SIZE = Deno.env.get('IMAGE_SIZE') ?? '1024x1024';
 
 function providerKey(): string {
   return PROVIDER === 'gemini' ? GEMINI_KEY : OPENAI_KEY;
@@ -68,43 +94,43 @@ const BUCKET = 'scans';
 const SIGNED_URL_TTL = 60 * 60 * 24;
 
 /**
- * The settings we offer, as scene descriptions. Bright and open on purpose —
- * the rendering exists to look good behind a profile and a showcase tile, and
- * a dark scene loses the car against the app's black canvas.
- */
-const BACKDROPS: Record<string, string> = {
-  beach: 'a wide open beach at golden hour, pale sand, turquoise sea and a clear luminous sky behind',
-  mountain: 'a high mountain pass road, snow-capped peaks and a bright blue sky behind',
-  coast: 'a coastal cliff road high above the ocean, clear morning light',
-  studio: 'a bright photography studio with a seamless light grey cyclorama and soft even lighting',
-};
-
-/**
  * Deliberately does NOT name the car.
  *
  * The first version opened with "Keep this exact car — Ferrari 488 GTB 2018 —",
  * which is an invitation: handed a label, a generative model draws its own idea
  * of a 488 instead of copying the photograph in front of it. The pixels are the
- * specification here, so the prompt points at them and nothing else.
+ * specification here, so the prompt points at them and nothing else. That rule
+ * matters more for a sticker, not less: a redraw is exactly the moment a model
+ * would rather draw the car it knows.
+ *
+ * Two things are pinned on purpose, and they are what makes a grid of these
+ * read as a collection rather than as a pile of exports: the lighting and finish
+ * are always the same, and the car always sits at the same margin in the frame.
+ * The viewing angle is *not* pinned — it stays whatever the player shot, because
+ * inventing a three-quarter view means inventing bodywork nobody photographed.
  */
-function buildPrompt(scene: string): string {
+function buildPrompt(background: 'transparent' | 'white'): string {
   return [
-    'Keep the car in this photograph exactly as it is and replace only what is',
-    'around it.',
+    'Redraw the car in this photograph as a single die-cut collectible sticker.',
     '',
-    'Absolute rule: the car must not change. Same body shape and proportions,',
-    'same paint colour, same wheels, same badges and trim, same viewing angle.',
-    'Do not restyle, modernise, idealise or substitute it for a similar car.',
-    'Copy it from the photograph.',
+    'Absolute rule: it must stay the same car. Same body shape and proportions,',
+    'same paint colour, same wheels, same badges and trim, same viewing angle as',
+    'the photograph. Do not modernise it, do not idealise the shape, do not',
+    'substitute a similar model. Read the car off the pixels.',
     '',
-    `New setting: ${scene}.`,
-    'Place the car centred in the frame with its whole body visible, and relight',
-    'it to match the new scene — including the ground contact shadow and the',
-    'reflections on the paintwork.',
+    'Style: clean glossy product illustration, smooth even studio lighting from',
+    'the front and above, crisp specular highlights on the paint, dark glass,',
+    'legible wheels. Remove every trace of the original surroundings — no road,',
+    'no sky, no buildings, no reflections of the street in the paintwork, no',
+    'ground shadow.',
     '',
-    'Photorealistic automotive photography, 35mm lens at eye level, crisp and',
-    'bright, the quality of a car magazine cover. Leave any licence plate blank.',
-    'No text, no watermark, no people, no other vehicles.',
+    background === 'transparent'
+      ? 'Output the car alone on a fully transparent background, with a smooth even white die-cut border about 3% of the image width following its silhouette.'
+      : 'Output the car alone on a plain pure white background (#FFFFFF), flat and uniform, with a smooth even white die-cut border following its silhouette. No gradient, no vignette, no grey halo at the edges.',
+    '',
+    'The whole car is visible and centred, filling most of the frame with a small',
+    'even margin on every side. Leave any licence plate blank. No text, no',
+    'watermark, no people, no other vehicles, no props.',
   ].join('\n');
 }
 
@@ -221,8 +247,11 @@ async function renderViaOpenAI(
   // The parameter that exists for exactly this problem: preserve the details of
   // the input rather than reinterpret them.
   form.append('input_fidelity', 'high');
-  form.append('output_format', 'jpeg');
-  form.append('output_compression', '85');
+  // The cutout, and the reason this path is the default. `transparent` requires
+  // a format that carries alpha, so png and jpeg are not interchangeable here —
+  // asking for jpeg silently gets an opaque background back.
+  form.append('background', 'transparent');
+  form.append('output_format', 'png');
   form.append('n', '1');
 
   const response = await fetch('https://api.openai.com/v1/images/edits', {
@@ -243,7 +272,7 @@ async function renderViaOpenAI(
     console.error('[restyle] openai returned no image');
     return { failed: true, billed: true };
   }
-  return { b64, mime: 'image/jpeg' };
+  return { b64, mime: 'image/png' };
 }
 
 /** Calls whichever image model is configured. */
@@ -294,21 +323,16 @@ Deno.serve(async (req) => {
   };
 
   let entryId: unknown;
-  let backdrop: unknown;
   try {
-    ({ entry_id: entryId, backdrop } = await req.json());
+    // A `backdrop` in the body is ignored rather than rejected: builds already on
+    // TestFlight still send one, and answering them with a sticker is better than
+    // answering them with a 400.
+    ({ entry_id: entryId } = await req.json());
   } catch {
     return finish({ error: 'bad_request' }, 400);
   }
 
   if (typeof entryId !== 'string' || !entryId) return finish({ error: 'bad_request' }, 400);
-  const scene = typeof backdrop === 'string' ? BACKDROPS[backdrop] : undefined;
-  if (!scene) {
-    // Only reachable from a client build whose `BACKDROPS` list has drifted from
-    // this one — the keys are mirrored by hand in `src/services/restyle.ts`.
-    telemetry.captureError('UnknownBackdrop', String(backdrop), { backdrop });
-    return finish({ error: 'unknown_backdrop' }, 400);
-  }
 
   // Ownership and source photo in one read. Scoping by user_id is what stops
   // one player from spending their allowance on another player's car.
@@ -356,7 +380,6 @@ Deno.serve(async (req) => {
     // The refusal that holds — and the one the paywall depends on. A free player
     // hits it on their second click, which is the whole conversion mechanism.
     telemetry.capture('restyle_refused_server', {
-      backdrop,
       free_limit: FREE_RESTYLE_LIMIT,
       pro_limit: PRO_RESTYLE_LIMIT,
     });
@@ -385,7 +408,10 @@ Deno.serve(async (req) => {
 
   const original = new Uint8Array(await blob.arrayBuffer());
   const renderStartedAt = Date.now();
-  const outcome = await renderImage(original, buildPrompt(scene));
+  const outcome = await renderImage(
+    original,
+    buildPrompt(PROVIDER === 'openai' ? 'transparent' : 'white'),
+  );
   const renderMs = Date.now() - renderStartedAt;
 
   if (!outcome.bytes) {
@@ -401,7 +427,6 @@ Deno.serve(async (req) => {
       stage: 'render',
       provider: PROVIDER,
       model: PROVIDER === 'gemini' ? GEMINI_MODEL : OPENAI_MODEL,
-      backdrop,
       billed: outcome.billed,
       refunded: !outcome.billed,
       duration_ms: renderMs,
@@ -411,13 +436,14 @@ Deno.serve(async (req) => {
     return finish({ error: 'restyle_failed' }, 502);
   }
 
-  // Gemini answers in PNG, OpenAI in JPEG. Store what we were actually given
-  // rather than mislabel a PNG as .jpg — expo-image sniffs content, but the
-  // signed URL's content-type is what a browser and a CDN go on.
+  // Store what we were actually given rather than mislabel a PNG as .jpg —
+  // expo-image sniffs content, but the signed URL's content-type is what a
+  // browser and a CDN go on, and an alpha channel announced as JPEG is an alpha
+  // channel a CDN may flatten.
   const extension = outcome.mime === 'image/png' ? 'png' : 'jpg';
-  // Deliberately a distinct path from the original, and stable per entry+
-  // backdrop so a re-render of the same choice replaces rather than accumulates.
-  const path = `${userId}/${entry.id}-${backdrop}.${extension}`;
+  // Distinct from the original, and stable per entry: a re-render replaces the
+  // sticker rather than accumulating one file per attempt.
+  const path = `${userId}/${entry.id}-sticker.${extension}`;
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
     .upload(path, outcome.bytes, { contentType: outcome.mime, upsert: true });
@@ -425,7 +451,6 @@ Deno.serve(async (req) => {
     // The worst failure in the function: we paid for the image and then lost it.
     telemetry.captureError('StorageFailed', uploadError.message, {
       stage: 'upload_rendering',
-      backdrop,
       bytes: outcome.bytes.length,
     });
     return finish({ error: 'storage_failed' }, 500);
@@ -459,7 +484,6 @@ Deno.serve(async (req) => {
    * side-by-side unless the latency and the failure rate are attributed.
    */
   telemetry.capture('restyle_delivered', {
-    backdrop,
     provider: PROVIDER,
     model: PROVIDER === 'gemini' ? GEMINI_MODEL : OPENAI_MODEL,
     duration_ms: renderMs,

@@ -10,7 +10,7 @@ import { EmptyState } from '../src/components/EmptyState';
 import { Icon } from '../src/components/Icon';
 import { Screen } from '../src/components/Screen';
 import { Text } from '../src/components/Text';
-import { displayPhoto } from '../src/lib/photo';
+import { displaySticker, isSticker } from '../src/lib/photo';
 import { events, track } from '../src/services/analytics';
 import { SHOWCASE_SIZE, useGameStore } from '../src/store/useGameStore';
 import { colors, gridItemWidth, gutter, radii, spacing } from '../src/theme';
@@ -50,7 +50,7 @@ export default function ShowcasePicker() {
             {garage.map((entry) => {
               const selected = showcase.includes(entry.id);
               const locked = !selected && full;
-              const photo = displayPhoto(entry);
+              const photo = displaySticker(entry);
 
               return (
                 <Pressable
@@ -69,7 +69,11 @@ export default function ShowcasePicker() {
                 >
                   <View style={[styles.thumb, selected && styles.thumbSelected]}>
                     {photo ? (
-                      <Image source={{ uri: photo }} style={styles.image} contentFit="cover" />
+                      <Image
+                        source={{ uri: photo }}
+                        style={styles.image}
+                        contentFit={isSticker(entry, photo) ? 'contain' : 'cover'}
+                      />
                     ) : (
                       <CarSilhouette width={80} color={colors.silhouette} />
                     )}

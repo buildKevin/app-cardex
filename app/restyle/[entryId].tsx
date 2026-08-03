@@ -17,35 +17,23 @@ import { CarSilhouette } from '../../src/components/CarSilhouette';
 import { Icon } from '../../src/components/Icon';
 import { Screen } from '../../src/components/Screen';
 import { Text } from '../../src/components/Text';
-import { displayPhoto } from '../../src/lib/photo';
+import { displayPhoto, displaySticker } from '../../src/lib/photo';
 import { breadcrumb, captureError, events, track } from '../../src/services/analytics';
 import { persistStyledPhoto } from '../../src/services/photo';
-import {
-  BACKDROPS,
-  RestyleError,
-  restylePhoto,
-  type BackdropKey,
-  type RestyleErrorCode,
-} from '../../src/services/restyle';
+import { RestyleError, restylePhoto, type RestyleErrorCode } from '../../src/services/restyle';
 import { pushEntry } from '../../src/services/sync';
-import {
-  useGameStore,
-  useGarageEntry,
-  useRestylesLeft,
-} from '../../src/store/useGameStore';
-import { colors, gridItemWidth, gutter, motion, radii, spacing } from '../../src/theme';
+import { useGameStore, useGarageEntry, useRestylesLeft } from '../../src/store/useGameStore';
+import { colors, gutter, motion, radii, spacing } from '../../src/theme';
 
-type Phase = 'choose' | 'working' | 'done';
+type Phase = 'idle' | 'working' | 'done';
 
 const ERROR_COPY: Record<RestyleErrorCode, string> = {
-  limit: 'Tu as utilisé ton rendu gratuit.',
+  limit: 'Tu as utilisé ton sticker gratuit.',
   not_synced: "Cette photo n'est pas encore sauvegardée. Réessaie dans un instant.",
   network: 'Connexion impossible. Vérifie ton réseau.',
-  failed: "L'IA n'a pas réussi ce rendu. Réessaie, ça ne t'a rien coûté.",
-  unconfigured: "Les rendus ne sont pas disponibles sur cette version.",
+  failed: "L'IA n'a pas réussi ce sticker. Réessaie, ça ne t'a rien coûté.",
+  unconfigured: 'Les stickers ne sont pas disponibles sur cette version.',
 };
-
-const CARD_WIDTH = gridItemWidth(2);
 
 export default function Restyle() {
   const router = useRouter();
@@ -59,8 +47,7 @@ export default function Restyle() {
   const markSynced = useGameStore((state) => state.markSynced);
   const left = useRestylesLeft();
 
-  const [backdrop, setBackdrop] = useState<BackdropKey>('beach');
-  const [phase, setPhase] = useState<Phase>('choose');
+  const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
 
   // Same slow sweep as the scanner, for the same reason: a generation takes
@@ -88,13 +75,16 @@ export default function Restyle() {
     );
   }
 
-  const preview = displayPhoto(entry);
+  // Before: the photograph, which is what is about to be redrawn. After: the
+  // sticker, on the plate it will live on everywhere else.
+  const done = phase === 'done';
+  const preview = done ? displaySticker(entry) : displayPhoto(entry);
 
   const generate = async () => {
     if (phase === 'working') return;
 
     if (!isPro && left <= 0) {
-      track(events.restyleBlockedByLimit, { source: 'client', backdrop });
+      track(events.restyleBlockedByLimit, { source: 'client' });
       router.push('/paywall?context=restyle');
       return;
     }
@@ -102,10 +92,9 @@ export default function Restyle() {
     setPhase('working');
     setError(null);
     track(events.restyleStarted, {
-      backdrop,
       is_pro: isPro,
-      // A re-roll on a car that already has a rendering is the case that burns
-      // the allowance fastest, and the one most likely to hit the ceiling.
+      // A re-roll on a car that already has a sticker is the case that burns the
+      // allowance fastest, and the one most likely to hit the ceiling.
       already_styled: Boolean(entry.styledPhotoUri),
       rarity: entry.rarity,
     });
@@ -133,16 +122,15 @@ export default function Restyle() {
       }
       if (!remoteId) throw new RestyleError('not_synced');
 
-      breadcrumb('restyle: calling the image model', { backdrop });
-      const result = await restylePhoto(remoteId, backdrop);
+      breadcrumb('restyle: calling the image model');
+      const result = await restylePhoto(remoteId);
       // Keep a local copy: the signed URL expires in a day, and this picture is
-      // now what every screen shows.
+      // now the entry's face in every grid.
       const uri = await persistStyledPhoto(result.uri, result.path);
 
       setStyledPhoto(entry.id, uri, result.path);
       consumeRestyle();
       track(events.restyleSucceeded, {
-        backdrop,
         make: entry.make,
         model: entry.model,
         rarity: entry.rarity,
@@ -156,24 +144,23 @@ export default function Restyle() {
       const code = caught instanceof RestyleError ? caught.code : 'network';
 
       if (code === 'limit') {
-        setPhase('choose');
-        track(events.restyleBlockedByLimit, { source: 'server', backdrop });
+        setPhase('idle');
+        track(events.restyleBlockedByLimit, { source: 'server' });
         router.push('/paywall?context=restyle');
         return;
       }
 
       track(events.restyleFailed, {
         code,
-        backdrop,
         is_pro: isPro,
         duration_ms: Date.now() - startedAt,
       });
       // Every one of these is ours: `not_synced` is a sync bug, `failed` is a
       // generation we paid nothing for but the player still waited thirty
       // seconds on, and `unconfigured` is a broken deploy.
-      captureError(caught, { stage: 'restyle', code, backdrop });
+      captureError(caught, { stage: 'restyle', code });
       setError(ERROR_COPY[code]);
-      setPhase('choose');
+      setPhase('idle');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
     }
   };
@@ -182,10 +169,16 @@ export default function Restyle() {
     <Screen scroll bleed>
       <View style={styles.hero}>
         {preview ? (
-          <Image source={{ uri: preview }} style={styles.image} contentFit="cover" transition={260} />
+          <Image
+            source={{ uri: preview }}
+            style={styles.image}
+            // The sticker is die-cut: cropping it to fill would cut the edge off.
+            contentFit={done ? 'contain' : 'cover'}
+            transition={260}
+          />
         ) : (
           <View style={styles.placeholder}>
-            <CarSilhouette width={180} color={colors.silhouette} />
+            <CarSilhouette width={180} />
           </View>
         )}
 
@@ -195,66 +188,36 @@ export default function Restyle() {
 
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.close}>
           <View style={styles.closeCircle}>
-            <Icon name="close" size={18} color={colors.text} />
+            <Icon name="close" size={18} color={colors.textInverted} />
           </View>
         </Pressable>
       </View>
 
       <View style={styles.content}>
-        {phase === 'done' ? (
+        {done ? (
           <Animated.View entering={FadeIn.duration(motion.base)} style={styles.block}>
             <Text variant="overline" tone="tertiary" uppercase>
-              Rendu terminé
+              Sticker créé
             </Text>
             <Text variant="title">
               {entry.make} {entry.model}
             </Text>
             <Text variant="body" tone="secondary">
-              Cette photo prend la place de l'originale dans ton garage, ta vitrine et ton profil.
-              Ta photo d'origine est gardée : tu peux comparer les deux depuis la fiche.
+              Il prend la place de la photo dans ton garage, ta vitrine et tes collections. Ta photo
+              d'origine reste celle de la fiche et de l'accueil.
             </Text>
             <Button label="Voir dans mon garage" onPress={() => router.back()} style={styles.cta} />
           </Animated.View>
         ) : (
           <View style={styles.block}>
             <Text variant="overline" tone="tertiary" uppercase>
-              Sublimer la photo
+              Transformer en sticker
             </Text>
-            <Text variant="title">Choisis un décor</Text>
+            <Text variant="title">Ta voiture, en collector</Text>
             <Text variant="body" tone="secondary">
-              L'IA replace ta voiture dans un nouveau décor sans rien changer à la voiture
-              elle-même.
+              L'IA redessine ta voiture en sticker découpé, sans rien changer au modèle, à sa
+              couleur ni à son angle. Ta photo est conservée.
             </Text>
-
-            <View style={styles.grid}>
-              {BACKDROPS.map((option) => {
-                const active = option.key === backdrop;
-                return (
-                  <Pressable
-                    key={option.key}
-                    onPress={() => {
-                      // Which decors people actually want. Four are offered and
-                      // the prompts cost nothing to change — dropping the one
-                      // nobody picks is only possible if we counted.
-                      track(events.backdropSelected, { backdrop: option.key, from: backdrop });
-                      setBackdrop(option.key);
-                    }}
-                    disabled={phase === 'working'}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: active }}
-                    style={[styles.card, active && styles.cardActive]}
-                  >
-                    <View style={styles.cardHead}>
-                      <Text variant="bodyMedium">{option.label}</Text>
-                      {active ? <Icon name="check" size={16} strokeWidth={2} /> : null}
-                    </View>
-                    <Text variant="caption" tone="tertiary">
-                      {option.hint}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
 
             {error ? (
               <Text variant="caption" style={styles.error}>
@@ -263,14 +226,14 @@ export default function Restyle() {
             ) : null}
 
             <Button
-              label={phase === 'working' ? 'Génération…' : 'Générer la photo'}
+              label={phase === 'working' ? 'Création…' : 'Créer le sticker'}
               caption={
                 phase === 'working'
                   ? 'Une trentaine de secondes'
                   : isPro
                     ? undefined
                     : left > 0
-                      ? 'Ton rendu offert'
+                      ? 'Ton sticker offert'
                       : 'Réservé à CarDex Pro'
               }
               onPress={generate}
@@ -293,7 +256,7 @@ export default function Restyle() {
 const styles = StyleSheet.create({
   hero: {
     aspectRatio: 4 / 3,
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.surface,
   },
   image: {
     ...StyleSheet.absoluteFill,
@@ -326,30 +289,6 @@ const styles = StyleSheet.create({
   },
   block: {
     gap: spacing.xs,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  card: {
-    width: CARD_WIDTH,
-    padding: spacing.lg,
-    borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    gap: spacing.xs,
-  },
-  cardActive: {
-    borderColor: colors.text,
-    borderWidth: 1,
-  },
-  cardHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
   },
   error: {
     marginTop: spacing.lg,

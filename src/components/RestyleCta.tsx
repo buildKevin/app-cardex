@@ -26,7 +26,7 @@ interface RestyleCtaProps {
 }
 
 /**
- * The entry point to the photo restyle, shared by the reveal and the fiche.
+ * The entry point to sticker generation, shared by the reveal and the fiche.
  *
  * Deliberately not a `<Button>`. It sits next to real buttons on both screens,
  * and a fourth grey rectangle in a stack of grey rectangles is invisible — this
@@ -53,9 +53,9 @@ export function RestyleCta({ entry, accent = colors.accent, source }: RestyleCta
 
   const styled = Boolean(entry.styledPhotoUri);
   const hint = isPro
-    ? 'Nouveau décor · une trentaine de secondes'
+    ? 'Une trentaine de secondes'
     : left > 0
-      ? 'Ton rendu offert · une trentaine de secondes'
+      ? 'Ton sticker offert · une trentaine de secondes'
       : 'Avec CarDex Pro';
 
   return (
@@ -94,7 +94,7 @@ export function RestyleCta({ entry, accent = colors.accent, source }: RestyleCta
 
         <View style={styles.copy}>
           <Text variant="bodyMedium">
-            {styled ? 'Refaire le rendu' : 'Sublimer la photo'}
+            {styled ? 'Refaire le sticker' : 'Transformer en sticker'}
           </Text>
           <Text variant="caption" tone="tertiary" numberOfLines={1}>
             {hint}

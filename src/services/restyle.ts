@@ -2,30 +2,17 @@ import { hasSupabase } from './env';
 import { supabase } from './supabase';
 
 /**
- * Photo restyle — the garage photo re-shot by an image model into a nicer
- * setting, for the profile and the showcase.
+ * Sticker generation — the garage photo redrawn by an image model as a die-cut
+ * collectible, for the garage grid and the showcase.
  *
  * Everything happens server-side in the `restyle-photo` edge function: it holds
- * the model key, owns the allowance, and resolves the backdrop key below into
- * the actual prompt. The client never sends prompt text and never sends an
- * image — only the id of a row it owns.
+ * the model key, owns the allowance, and builds the prompt. The client never
+ * sends prompt text and never sends an image — only the id of a row it owns.
+ *
+ * There is nothing to choose any more. The four backdrops that used to live here
+ * are gone, and with them the mirrored key list that could drift from the
+ * server's.
  */
-
-export type BackdropKey = 'beach' | 'mountain' | 'coast' | 'studio';
-
-export interface Backdrop {
-  key: BackdropKey;
-  label: string;
-  hint: string;
-}
-
-/** Mirrors the keys in `supabase/functions/restyle-photo/index.ts`. */
-export const BACKDROPS: Backdrop[] = [
-  { key: 'beach', label: 'Plage', hint: 'Sable clair, fin de journée' },
-  { key: 'mountain', label: 'Montagne', hint: 'Col d’altitude, ciel bleu' },
-  { key: 'coast', label: 'Route côtière', hint: 'Falaise, lumière du matin' },
-  { key: 'studio', label: 'Studio', hint: 'Fond clair, lumière douce' },
-];
 
 export type RestyleErrorCode =
   | 'limit'
@@ -68,20 +55,17 @@ function codeFor(status: number | undefined, body: unknown): RestyleErrorCode {
 }
 
 /**
- * Asks the server to re-shoot `remoteId` against `backdrop`.
+ * Asks the server for `remoteId`'s sticker.
  *
  * Takes the *remote* id: the row has to exist server-side, because the function
  * reads the stored photo rather than accepting one. Callers push the entry
  * first when it has not synced yet.
  */
-export async function restylePhoto(
-  remoteId: string,
-  backdrop: BackdropKey,
-): Promise<RestyleResult> {
+export async function restylePhoto(remoteId: string): Promise<RestyleResult> {
   if (!supabase) throw new RestyleError('unconfigured');
 
   const { data, error } = await supabase.functions.invoke('restyle-photo', {
-    body: { entry_id: remoteId, backdrop },
+    body: { entry_id: remoteId },
   });
 
   if (error) {

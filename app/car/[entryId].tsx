@@ -15,7 +15,7 @@ import { Text } from '../../src/components/Text';
 import { getBrand } from '../../src/data/brands';
 import { entryFiche } from '../../src/lib/fiche';
 import { formatDiscoveredAt, formatPower, formatPrice } from '../../src/lib/format';
-import { displayPhoto, hasBothPhotos } from '../../src/lib/photo';
+import { displayPhoto, displaySticker, hasBothPhotos } from '../../src/lib/photo';
 import { RARITY_LABEL, rarityColor } from '../../src/lib/rarity';
 import { captureError, events, track } from '../../src/services/analytics';
 import { deletePhoto } from '../../src/services/photo';
@@ -34,7 +34,9 @@ export default function CarDetail() {
 
   // A comparison, not a revert: the rendering stays the entry's picture
   // everywhere else, this only peeks at the photograph behind it.
-  const [showOriginal, setShowOriginal] = useState(false);
+  // The fiche leads with the photograph now, and the sticker is the thing you
+  // toggle *to* — the reverse of when the rendering was simply a better photo.
+  const [showSticker, setShowSticker] = useState(false);
 
   // The card is reachable from the garage grid, the hero, a collection slot, the
   // showcase and the reveal, so `$screen`'s `previous_screen` is what says which
@@ -72,7 +74,7 @@ export default function CarDetail() {
   const showcaseFull = showcase.length >= SHOWCASE_SIZE;
 
   const canCompare = hasBothPhotos(entry);
-  const hero = showOriginal && canCompare ? entry.photoUri : displayPhoto(entry);
+  const hero = showSticker && canCompare ? displaySticker(entry) : displayPhoto(entry);
 
   const onToggleShowcase = () => {
     if (!inShowcase && showcaseFull) {
@@ -128,7 +130,12 @@ export default function CarDetail() {
     <Screen scroll bleed>
       <View style={styles.hero}>
         {hero ? (
-          <Image source={{ uri: hero }} style={styles.image} contentFit="cover" transition={220} />
+          <Image
+            source={{ uri: hero }}
+            style={styles.image}
+            contentFit={showSticker ? 'contain' : 'cover'}
+            transition={220}
+          />
         ) : (
           <View style={styles.placeholder}>
             <CarSilhouette width={180} color={colors.silhouette} />
@@ -137,7 +144,7 @@ export default function CarDetail() {
 
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.close}>
           <View style={styles.closeCircle}>
-            <Icon name="close" size={18} color={colors.text} />
+            <Icon name="close" size={18} color={colors.textInverted} />
           </View>
         </Pressable>
 
@@ -146,14 +153,17 @@ export default function CarDetail() {
             onPress={() => {
               // How often a player checks the rendering against their own photo
               // is the closest thing we have to "was the rendering any good".
-              track(events.photoCompared, { showing: showOriginal ? 'styled' : 'original' });
-              setShowOriginal((current) => !current);
+              track(events.photoCompared, { showing: showSticker ? 'photo' : 'sticker' });
+              setShowSticker((current) => !current);
             }}
             hitSlop={8}
             style={styles.compare}
           >
             <View style={styles.compareChip}>
-              <Text variant="caption">{showOriginal ? 'Voir le rendu' : "Voir l'original"}</Text>
+              {/* On the dark plate over the photo, so inverted rather than primary. */}
+              <Text variant="caption" color={colors.textInverted}>
+                {showSticker ? 'Voir la photo' : 'Voir le sticker'}
+              </Text>
             </View>
           </Pressable>
         ) : null}

@@ -4,7 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { getCar } from '../data/cars';
 import type { GarageEntry } from '../data/types';
-import { displayPhoto } from '../lib/photo';
+import { displaySticker, isSticker } from '../lib/photo';
 import { RARITY_ORDER, rarityColor } from '../lib/rarity';
 import { colors, motion, radii, shadow, spacing } from '../theme';
 import { CarSilhouette } from './CarSilhouette';
@@ -27,7 +27,8 @@ export function CarTile({ entry, onPress }: CarTileProps) {
   const pressed = useSharedValue(0);
 
   const car = getCar(entry.carId);
-  const photo = displayPhoto(entry);
+  const photo = displaySticker(entry);
+  const sticker = isSticker(entry, photo);
   // Only the top two tiers get a marker. A dot on every tile is a dot that says
   // nothing, and common is the default state of a garage.
   const standout = RARITY_ORDER.indexOf(entry.rarity) >= 2;
@@ -47,13 +48,17 @@ export function CarTile({ entry, onPress }: CarTileProps) {
       }}
     >
       <Animated.View style={animatedStyle}>
-        <View style={styles.plate}>
-          <View style={styles.clip}>
+        <View style={[styles.plate, sticker && styles.plateSticker]}>
+          {/* Clipping is for a photo bleeding to the plate's edge. A sticker fits
+              inside by construction, and the clip would eat its shadow. */}
+          <View style={[styles.clip, sticker && styles.clipOpen]}>
             {photo ? (
               <Image
                 source={{ uri: photo }}
-                style={StyleSheet.absoluteFill}
-                contentFit="cover"
+                style={[StyleSheet.absoluteFill, sticker && styles.sticker]}
+                // A die-cut sticker cropped to fill is a die-cut sticker with its
+                // edge cut off.
+                contentFit={sticker ? 'contain' : 'cover'}
                 transition={220}
               />
             ) : (
@@ -86,6 +91,23 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     borderRadius: radii.lg,
     backgroundColor: colors.surface,
+    ...shadow.card,
+  },
+  /**
+   * A sticker needs no plate: it is already an object with its own outline, and
+   * a grey square behind it puts it back in the box the die-cut took it out of.
+   * The shadow moves onto the image, where iOS computes it from the alpha
+   * channel and it follows the silhouette.
+   */
+  plateSticker: {
+    backgroundColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  clipOpen: {
+    overflow: 'visible',
+  },
+  sticker: {
     ...shadow.card,
   },
   // Same reason as `Card`: clipping on the plate itself would eat its shadow.

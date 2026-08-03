@@ -144,9 +144,10 @@ export const events = {
   scanBlockedByLimit: 'scan_blocked_by_limit',
   scanRetried: 'scan_retried',
 
-  // Restyle
+  // Sticker generation. Kept under the `restyle_` prefix: renaming a live event
+  // splits every existing funnel in two, and the feature is the same spend and
+  // the same paywall trigger it always was.
   restyleCtaTapped: 'restyle_cta_tapped',
-  backdropSelected: 'backdrop_selected',
   restyleStarted: 'restyle_started',
   restyleSucceeded: 'restyle_succeeded',
   restyleFailed: 'restyle_failed',

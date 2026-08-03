@@ -16,7 +16,7 @@ import { Text } from '../../src/components/Text';
 import { getBrand } from '../../src/data/brands';
 import { CARS_BY_BRAND } from '../../src/data/cars';
 import { formatPower } from '../../src/lib/format';
-import { displayPhoto } from '../../src/lib/photo';
+import { displaySticker, isSticker } from '../../src/lib/photo';
 import { colors, gridItemWidth, radii, spacing } from '../../src/theme';
 import { useGameStore, useStats } from '../../src/store/useGameStore';
 
@@ -126,7 +126,7 @@ export default function BrandCollection() {
               );
             }
 
-            const photo = displayPhoto(entry);
+            const photo = displaySticker(entry);
 
             return (
               <Pressable
@@ -136,7 +136,11 @@ export default function BrandCollection() {
               >
                 <View style={styles.unlocked}>
                   {photo ? (
-                    <Image source={{ uri: photo }} style={styles.photo} contentFit="cover" />
+                    <Image
+                      source={{ uri: photo }}
+                      style={styles.photo}
+                      contentFit={isSticker(entry, photo) ? 'contain' : 'cover'}
+                    />
                   ) : (
                     <CarSilhouette width={104} color={colors.silhouette} />
                   )}

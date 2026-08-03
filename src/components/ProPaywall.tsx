@@ -23,7 +23,7 @@ import { Text } from './Text';
 
 const PERKS = [
   'Scans illimités',
-  `${PRO_RESTYLE_LIMIT} photos de studio par mois`,
+  `${PRO_RESTYLE_LIMIT} stickers par mois`,
   'Toutes les futures fonctionnalités',
   'Badge Pro sur ton profil',
   'Aucune publicité, jamais',
@@ -44,7 +44,7 @@ const PLAN_NOTE: Record<PlanKey, string> = {
 interface Props {
   /** Where the paywall was opened from, for the copy at the top. */
   fromLimit: boolean;
-  /** Opened from a second photo restyle — a different promise sells it. */
+  /** Opened from a second sticker — a different promise sells it. */
   fromRestyle?: boolean;
   busy: boolean;
   onPurchase: (plan: Plan) => void;
@@ -102,7 +102,7 @@ export function ProPaywall({
 
           <Text variant="display" style={styles.title}>
             {fromRestyle
-              ? 'Ton rendu offert\nest utilisé'
+              ? 'Ton sticker offert\nest utilisé'
               : fromLimit
                 ? 'Tes 10 scans gratuits\nsont utilisés'
                 : 'Débloque\nCarDex Pro'}
@@ -110,7 +110,7 @@ export function ProPaywall({
 
           <Text variant="body" tone="secondary" style={styles.subtitle}>
             {fromRestyle
-              ? `Passe Pro pour ${PRO_RESTYLE_LIMIT} rendus par mois, et mets toute ta collection en valeur.`
+              ? `Passe Pro pour ${PRO_RESTYLE_LIMIT} stickers par mois, et transforme toute ta collection.`
               : fromLimit
                 ? `La version gratuite s'arrête à ${FREE_SCAN_LIMIT} scans. Passe Pro pour continuer à collectionner.`
                 : 'Scanne sans limite et garde ta collection à jour.'}
