@@ -77,19 +77,13 @@ via l'app TestFlight — plus de Metro, plus de tunnel, plus de dev client.
 Ces deux points laissent passer un build TestFlight interne. Ils font refuser
 l'app en review, et en interne ils rendent le paywall inerte.
 
-### 4. Les 3 URLs légales
-`verify:release` les signale. À ajouter dans `eas.json`, profil `production` :
+### ~~4. Les 3 URLs légales~~ ✅ faite
+Les trois pages sont publiées sur Notion Sites et câblées dans `eas.json`, profil
+`production`. Texte source dans `docs/legal/`.
 
-```json
-"EXPO_PUBLIC_TERMS_URL": "https://…/cgu",
-"EXPO_PUBLIC_PRIVACY_URL": "https://…/confidentialite",
-"EXPO_PUBLIC_SUPPORT_URL": "https://…/support"
-```
-
-Sans elles, `src/config/release.ts` masque les liens — et Apple exige que les CGU
-et la politique de confidentialité soient atteignables depuis le paywall.
-Trois pages statiques suffisent (Notion public, GitHub Pages, n'importe quoi de
-joignable en HTTPS).
+Un lien `app.notion.com/p/…` ne convient pas : il est interne et affiche un écran de
+login à qui n'est pas connecté. Il faut un lien `notion.site`. Voir LAUNCH.md § 2.3
+pour les deux faux négatifs rencontrés en vérifiant.
 
 ### 5. La clé RevenueCat iOS
 `EXPO_PUBLIC_REVENUECAT_IOS_KEY` (`appl_…`), même endroit dans `eas.json`.
@@ -168,7 +162,8 @@ le webhook, et l'équivalence des deux matchers (515 sondes).
    les fiches communautaires (`discovered_cars`)
 4. tester sur TestFlight : Apple Sign-In, scans OpenAI réels, sync garage, et
    une voiture hors catalogue notée par l'IA ← ici
-5. puis seulement : URLs légales, produits IAP + clé RevenueCat, webhook, logos
+5. ~~URLs légales~~ ✅ publiées et câblées le 03/08/2026
+6. puis seulement : produits IAP + clé RevenueCat, webhook, logos
 
 TestFlight **interne** (jusqu'à 100 testeurs de l'équipe) ne passe **aucune
 review**. TestFlight **externe** (jusqu'à 10 000) en passe une, et là les points

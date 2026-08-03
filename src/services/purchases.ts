@@ -28,11 +28,20 @@ export const PRO_ENTITLEMENT = ENV.revenueCatEntitlement;
 /** Offering used when RevenueCat has no `current` offering set. */
 export const PRO_OFFERING = 'default';
 
-/** Product identifiers configured in the RevenueCat dashboard. */
+/**
+ * Product identifiers, most specific first. Only the fallback path in
+ * `readPlans` reads them — built-in package types are tried before — so these
+ * matter for an offering built with custom packages.
+ *
+ * Two ids per plan on purpose: the App Store products carry the reverse-DNS id,
+ * while the RevenueCat Test Store products created for simulated purchases keep
+ * the short one. Dropping the short id would silently break the test path, and
+ * a test path that resolves no plan looks exactly like a broken paywall.
+ */
 export const PRO_PRODUCTS = {
-  lifetime: 'lifetime',
-  yearly: 'yearly',
-  monthly: 'monthly',
+  lifetime: ['com.buildkevin.cardex.pro.lifetime', 'lifetime'],
+  yearly: ['com.buildkevin.cardex.pro.yearly', 'yearly'],
+  monthly: ['com.buildkevin.cardex.pro.monthly', 'monthly'],
 } as const;
 
 export type PlanKey = keyof typeof PRO_PRODUCTS;
@@ -273,7 +282,9 @@ export function readPlans(offering: PurchasesOffering | null): Plan[] {
   for (const key of ['lifetime', 'yearly', 'monthly'] as PlanKey[]) {
     const pkg =
       byType[key] ??
-      offering.availablePackages.find((p) => p.product.identifier === PRO_PRODUCTS[key]) ??
+      offering.availablePackages.find((p) =>
+        (PRO_PRODUCTS[key] as readonly string[]).includes(p.product.identifier),
+      ) ??
       null;
 
     if (pkg) {

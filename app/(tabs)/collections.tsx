@@ -6,6 +6,7 @@ import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { Text } from '../../src/components/Text';
 import { BRANDS } from '../../src/data/brands';
+import { events, track } from '../../src/services/analytics';
 import { useStats } from '../../src/store/useGameStore';
 import { spacing } from '../../src/theme';
 
@@ -42,7 +43,19 @@ export default function Collections() {
               key={brand.id}
               brand={brand}
               progress={stats.brands[brand.id]}
-              onPress={() => router.push(`/collection/${brand.id}`)}
+              onPress={() => {
+                // Which brands players actually open, against how far along they
+                // are. A brand nobody opens at 0/5 is a brand nobody is chasing.
+                track(events.collectionOpened, {
+                  brand_id: brand.id,
+                  make: brand.name,
+                  owned: stats.brands[brand.id].owned,
+                  total: stats.brands[brand.id].total,
+                  complete: stats.brands[brand.id].complete,
+                  source: 'list',
+                });
+                router.push(`/collection/${brand.id}`);
+              }}
             />
           ))}
         </View>

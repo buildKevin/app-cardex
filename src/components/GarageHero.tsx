@@ -5,6 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { getCar } from '../data/cars';
 import type { GarageEntry } from '../data/types';
 import { formatPower } from '../lib/format';
+import { displayPhoto } from '../lib/photo';
 import { rarityColor } from '../lib/rarity';
 import { colors, gutter, motion, radii, spacing } from '../theme';
 import { BrandLogo } from './BrandLogo';
@@ -35,6 +36,7 @@ export function GarageHero({ entry, onPress }: GarageHeroProps) {
 
   const height = Math.min(Math.round(width * 1.06), 470);
   const car = entry ? getCar(entry.carId) : null;
+  const photo = entry ? displayPhoto(entry) : null;
   // Empty garage has no rarity to echo, so the halo borrows the mid tier.
   const accent = entry ? rarityColor(entry.rarity) : colors.rarity.rare;
 
@@ -44,9 +46,9 @@ export function GarageHero({ entry, onPress }: GarageHeroProps) {
 
   const body = (
     <Animated.View style={[styles.root, { height }, animatedStyle]}>
-      {entry?.photoUri ? (
+      {photo ? (
         <Image
-          source={{ uri: entry.photoUri }}
+          source={{ uri: photo }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           transition={280}
@@ -65,7 +67,7 @@ export function GarageHero({ entry, onPress }: GarageHeroProps) {
       {/* Bloom in the rarity of the find — drawn over the scrim, or the black
           would swallow the only colour on the screen. */}
       <View style={[styles.bloom, { bottom: -Math.round(width * 0.44) }]} pointerEvents="none">
-        <Glow color={accent} width={Math.round(width * 1.3)} intensity={entry?.photoUri ? 0.24 : 0.32} />
+        <Glow color={accent} width={Math.round(width * 1.3)} intensity={photo ? 0.24 : 0.32} />
       </View>
 
       <View style={styles.caption}>

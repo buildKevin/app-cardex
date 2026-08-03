@@ -2,6 +2,8 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { events, track } from '../../src/services/analytics';
+
 import { BrandLogo } from '../../src/components/BrandLogo';
 import { Card } from '../../src/components/Card';
 import { CarSilhouette } from '../../src/components/CarSilhouette';
@@ -14,6 +16,7 @@ import { Text } from '../../src/components/Text';
 import { getBrand } from '../../src/data/brands';
 import { CARS_BY_BRAND } from '../../src/data/cars';
 import { formatPower } from '../../src/lib/format';
+import { displayPhoto } from '../../src/lib/photo';
 import { colors, gridItemWidth, radii, spacing } from '../../src/theme';
 import { useGameStore, useStats } from '../../src/store/useGameStore';
 
@@ -94,7 +97,22 @@ export default function BrandCollection() {
 
             if (!entry) {
               return (
-                <View key={car.id} style={styles.slot}>
+                // Pressable purely to measure it: a locked slot has nothing to
+                // open, and a tap on one is a player asking "what is this car?".
+                // How often that happens is the case for revealing a hint.
+                <Pressable
+                  key={car.id}
+                  style={styles.slot}
+                  onPress={() =>
+                    track(events.lockedSlotTapped, {
+                      brand_id: brand.id,
+                      car_id: car.id,
+                      rarity: car.rarity,
+                      slot: index + 1,
+                      owned: progress.owned,
+                    })
+                  }
+                >
                   <View style={styles.locked}>
                     <CarSilhouette width={104} color="#1A1A20" />
                   </View>
@@ -104,9 +122,11 @@ export default function BrandCollection() {
                   <Text variant="bodyMedium" tone="tertiary">
                     ? ? ?
                   </Text>
-                </View>
+                </Pressable>
               );
             }
+
+            const photo = displayPhoto(entry);
 
             return (
               <Pressable
@@ -115,8 +135,8 @@ export default function BrandCollection() {
                 onPress={() => router.push(`/car/${entry.id}`)}
               >
                 <View style={styles.unlocked}>
-                  {entry.photoUri ? (
-                    <Image source={{ uri: entry.photoUri }} style={styles.photo} contentFit="cover" />
+                  {photo ? (
+                    <Image source={{ uri: photo }} style={styles.photo} contentFit="cover" />
                   ) : (
                     <CarSilhouette width={104} color="#2A2A33" />
                   )}

@@ -70,6 +70,37 @@ Things that already bit us on SDK 57 / RN 0.86:
   the model call (refuse early, never pay for a request we'd reject), then
   `commit_scan()` only if the result matched the catalogue. An uncatalogued car
   is our gap, so it never costs the player a scan.
+- **The photo restyle takes an entry id, never an image.** `restyle-photo` reads
+  the stored photo from the `scans` bucket itself and resolves the backdrop
+  *key* into a prompt server-side. A function that restyled whatever bytes it
+  was handed, on whatever prompt it was given, is an open image generator billed
+  to us — the ownership check on `garage` is what bounds the feature to a
+  player's own cars. The consequence is that an entry must be synced before it
+  can be restyled; the client pushes it first rather than failing.
+- **A restyle never replaces the original.** `photo_path` and
+  `styled_photo_path` both live on the row, and `displayPhoto()` in
+  `src/lib/photo.ts` is the single place that decides which one a screen shows —
+  eight screens render an entry's photo, and the first divergence would be a
+  showcase still showing the raw snapshot. The rendering is also copied to disk
+  (`persistStyledPhoto`), because the signed URL expires in a day and that
+  picture is now the entry's face.
+- **Restyle accounting mirrors `begin_scan`/`commit_scan`, and must.** An image
+  call costs 10-40x a vision call, so: refuse before paying, charge only on a
+  stored result, and keep `restyle_calls` as a ceiling so a failing generation
+  cannot be retried forever for free. Free gets **one for the lifetime of the
+  account** — `begin_restyle` deliberately rolls over only Pro's window, because
+  a monthly free rendering means no second click ever reaches the paywall.
+- **The restyle runs on Gemini, not `gpt-image-1`, and the prompt never names
+  the car.** Three mistakes shipped in the first version and all three cost
+  fidelity: `gpt-image-1` regenerates the whole frame on an edit so nothing
+  guarantees the car survives; `quality: low` strips exactly the details that
+  make a car recognisable (wheels, grille, shoulder line); and opening the
+  prompt with "Keep this exact car — Ferrari 488 GTB 2018 —" hands the model a
+  label it will happily draw *its* idea of instead of copying the photograph.
+  The pixels are the specification. Gemini's image models are built for
+  "keep this subject, change the scene" and cost about a quarter of OpenAI at
+  the quality this needs; `IMAGE_PROVIDER` keeps OpenAI reachable for a
+  side-by-side, never as the default.
 - **RevenueCat's `CustomerInfo` is the only source of truth for Pro.** The
   `isPro` store flag is a cache so the UI does not flicker on cold start; it is
   written from a `CustomerInfo`, never from a completed transaction. A failed
@@ -83,6 +114,54 @@ Things that already bit us on SDK 57 / RN 0.86:
 - **The native purchase modules are loaded lazily**, through `require()` inside
   a try/catch. `react-native-purchases-ui` throws on import in Expo Go and on
   web, and the app must still run with an empty `.env`.
+- **PostHog is one client, created at module load in `src/services/analytics.ts`
+  and disabled rather than absent.** `disabled: !hasPostHog` is what keeps the
+  empty-`.env` property: every method stays callable, so no call site needs a
+  guard and `usePostHog()` works inside the provider. The previous shape — a
+  `null` client behind `initAnalytics()` — silently swallowed events and made the
+  provider impossible. Never add a `if (client)` branch back.
+- **Event names live only in `events` in `analytics.ts`**, `snake_case` and past
+  tense. A literal string passed to `track()` is a name that will drift and then
+  quietly split one insight into two.
+- **Player state is registered as super properties, never passed per call.**
+  `syncPlayerContext()` in `<Telemetry>` (`app/_layout.tsx`) attaches `is_pro`,
+  `level`, `cars_owned`, `scans_left` and the rest to *every* event, including
+  autocaptured touches. That is what makes "do players who finished a collection
+  convert better?" answerable from a scan event. A property that has to be
+  remembered at forty call sites is a property that will be missing at one.
+- **Screen views are captured from the pathname, with dynamic segments folded
+  back into their template.** `captureScreens` is off in the provider because
+  Expo Router exposes no `NavigationContainer` for the SDK to hook. `screen()`
+  turns `/car/9f3a…` into `/car/[entryId]` and moves the id to a property —
+  without that, one player with forty cars produces forty screen names and
+  `$screen` is unusable. Add new dynamic routes to `DYNAMIC_ROUTES`.
+- **A caught error still needs `captureError()`.** Almost every failure in this
+  app is caught and turned into a message on screen, so it never reaches the
+  uncaught handler and never appears in Error Tracking. The event says how often;
+  the exception says why. `no_car` is the exception to the exception — that is
+  the player framing badly, and filing it would bury the real ones.
+- **`console` capture is off in `errorTracking.autocapture`, on purpose.**
+  `PostHogErrorBoundary` reports render errors and React logs every one of them
+  to `console.error`; enabling both files each crash twice under two
+  fingerprints.
+- **The e-mail address is never sent.** `identify()` sets `provider` and
+  `has_email`, not the address. Nothing we measure needs it, and a key in `.env`
+  is not consent — if that changes, the privacy policy changes first.
+- **Server-side events use the Supabase user id as `distinctId`, always.** It is
+  the same value the app passes to `identify()`, and the only thing stitching a
+  server event onto the person who caused it. `supabase/functions/_shared/posthog.ts`
+  is deliberately not `npm:posthog-node`: an edge function pays for every
+  dependency on a cold start while already waiting on a model, and the SDK's
+  background flush timer is the wrong shape for an isolate that gets frozen the
+  moment it responds. Hence one queue per request and an **awaited** `flush()` at
+  every exit — a queued batch in a frozen isolate is a batch nobody sees.
+- **What the client cannot see is exactly what the server must report**: model
+  latency and token counts, whether an image call was billed or refunded, and —
+  in `revenuecat-webhook` — renewals, billing failures and expiries, which all
+  happen while the app is closed. `purchase_completed` is the last thing the
+  client ever says about a subscriber; everything about whether they *stayed* one
+  is in the webhook. It also owns the `is_pro` person property, for the same
+  reason it owns the column.
 - **Online, the server's match wins.** `identify-car` returns `car_id`, and
   `resolveScan()` honours it whenever it is present. The client only matches
   locally in demo mode and the direct-OpenAI dev path, where no scan is charged,

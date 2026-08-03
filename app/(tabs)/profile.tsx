@@ -28,8 +28,9 @@ import { SettingsRow } from '../../src/components/SettingsRow';
 import { Text } from '../../src/components/Text';
 import { badgeStates, rankBadges, unlockedBadgeCount } from '../../src/data/badges';
 import { formatDiscoveredAt, formatNumber } from '../../src/lib/format';
+import { displayPhoto } from '../../src/lib/photo';
 import { LEGAL, hasLegalLinks } from '../../src/config/release';
-import { events, resetAnalytics, track } from '../../src/services/analytics';
+import { captureError, events, resetAnalytics, track } from '../../src/services/analytics';
 import { deleteAccount, signOut } from '../../src/services/auth';
 import { hasSupabase } from '../../src/services/env';
 import { deletePhoto, pickImage, prepareAvatar } from '../../src/services/photo';
@@ -125,6 +126,27 @@ export default function Profile() {
     };
   }, [isPro]);
 
+  /**
+   * A rename is only interesting when the name actually moved: both handlers on
+   * the field fire on every dismissal, and `setUsername` is called with the same
+   * string most of the time.
+   */
+  const commitName = () => {
+    setUsername(draftName);
+    const next = draftName.trim() || 'Collectionneur';
+    if (next === profile.username) return;
+    track(events.usernameChanged, { length: next.length, was_default: profile.username === 'Collectionneur' });
+  };
+
+  /**
+   * Traffic to the support link is the one number that says whether the app is
+   * confusing enough that people go looking for a human.
+   */
+  const openLegal = (kind: 'terms' | 'privacy' | 'support', url: string) => {
+    track(events.legalLinkOpened, { kind });
+    WebBrowser.openBrowserAsync(url).catch((error) => captureError(error, { stage: 'legal', kind }));
+  };
+
   const badges = badgeStates(stats);
   const unlocked = unlockedBadgeCount(stats);
   const previewBadges = rankBadges(badges).slice(0, BADGE_PREVIEW);
@@ -136,7 +158,11 @@ export default function Profile() {
   const build = Application.nativeBuildVersion;
 
   /** Photos live on disk, outside the store, so they need removing by hand. */
-  const purgePhotos = () => garage.forEach((entry) => deletePhoto(entry.photoUri));
+  const purgePhotos = () =>
+    garage.forEach((entry) => {
+      deletePhoto(entry.photoUri);
+      deletePhoto(entry.styledPhotoUri ?? null);
+    });
 
   /**
    * The picker returns a cache uri, so the pick only counts once `prepareAvatar`
@@ -145,6 +171,13 @@ export default function Profile() {
    */
   const pickAvatar = async (source: 'library' | 'camera') => {
     const picked = await pickImage(source);
+
+    // `denied` and `unavailable` are the two states we cannot see from the
+    // outside: one is a permission the player refused, the other is a build made
+    // before the pod was installed. Both look like "nothing happened".
+    if (picked.status !== 'picked') {
+      track(events.avatarChanged, { source, outcome: picked.status });
+    }
 
     if (picked.status === 'denied') {
       Alert.alert(
@@ -174,18 +207,23 @@ export default function Profile() {
     setSavingAvatar(false);
 
     if (!uri) {
+      // The copy into the documents directory failed, which is a real bug and not
+      // something the player can act on beyond the retry we suggest.
+      track(events.photoFailed, { stage: 'prepare_avatar', source });
       Alert.alert('Photo non enregistrée', 'Réessaie dans un instant.');
       return;
     }
 
     setAvatar(uri);
     deletePhoto(previous);
+    track(events.avatarChanged, { source, outcome: 'saved', replaced: Boolean(previous) });
   };
 
   const removeAvatar = () => {
     const previous = profile.avatarUri;
     setAvatar(null);
     deletePhoto(previous);
+    track(events.avatarRemoved);
   };
 
   const onChangeAvatar = () => {
@@ -213,6 +251,7 @@ export default function Profile() {
       Alert.alert('CarDex Pro restauré', 'Ton accès est de nouveau actif.');
       return;
     }
+    track(events.restoreFailed, { context: 'profile', provider: profile.provider });
     Alert.alert(
       'Aucun achat trouvé',
       'Vérifie que tu es bien connecté avec le compte qui a servi à l’achat.',
@@ -232,8 +271,10 @@ export default function Profile() {
     const presented = await presentCustomerCenter({
       onRestoreCompleted: (info) => setPro(readProStatus(info).isPro),
       onShowingManageSubscriptions: () => track(events.subscriptionManaged),
+      // The single most valuable event in the app: the reason a paying player
+      // gave for leaving, in their own words from the RevenueCat survey.
       onFeedbackSurveyCompleted: (optionId) =>
-        track(events.churnSurveyCompleted, { option: optionId }),
+        track(events.churnSurveyCompleted, { option: optionId, plan: pro?.productIdentifier }),
     });
 
     if (!presented) {
@@ -267,6 +308,14 @@ export default function Profile() {
           text: 'Vider',
           style: 'destructive',
           onPress: () => {
+            // Throwing away a collection is the loudest churn signal short of
+            // deleting the account, and it carries what was lost.
+            track(events.garageReset, {
+              cars: stats.cars,
+              xp: stats.xp,
+              level: stats.progress.level,
+              badges: unlocked,
+            });
             purgePhotos();
             resetGarage();
           },
@@ -286,7 +335,14 @@ export default function Profile() {
           // Back to an anonymous RevenueCat id, or the next person to sign in
           // on this device inherits these entitlements.
           await resetPurchaser();
-          track(events.signedOut);
+          // Before `resetAnalytics`, or it would be attributed to a fresh
+          // anonymous person instead of the account that just left.
+          track(events.signedOut, {
+            provider: profile.provider,
+            was_pro: isPro,
+            cars: stats.cars,
+            level: stats.progress.level,
+          });
           resetAnalytics();
           signOutLocal();
           setBusy(null);
@@ -320,6 +376,8 @@ export default function Profile() {
           setBusy(null);
 
           if (outcome === 'error') {
+            // A refused deletion is an App Store review risk, not just a bug.
+            captureError(new Error('account deletion failed'), { outcome });
             Alert.alert(
               'Suppression impossible',
               'Ton compte n’a pas pu être supprimé. Réessaie dans un instant.',
@@ -327,7 +385,13 @@ export default function Profile() {
             return;
           }
 
-          track(events.accountDeleted, { remote: outcome === 'deleted' });
+          track(events.accountDeleted, {
+            remote: outcome === 'deleted',
+            was_pro: isPro,
+            cars: stats.cars,
+            level: stats.progress.level,
+            provider: profile.provider,
+          });
           purgePhotos();
           deletePhoto(profile.avatarUri);
           resetAnalytics();
@@ -360,8 +424,8 @@ export default function Profile() {
             <TextInput
               value={draftName}
               onChangeText={setDraftName}
-              onEndEditing={() => setUsername(draftName)}
-              onSubmitEditing={() => setUsername(draftName)}
+              onEndEditing={commitName}
+              onSubmitEditing={commitName}
               style={styles.nameInput}
               placeholder="Ton pseudo"
               placeholderTextColor={colors.textTertiary}
@@ -419,10 +483,12 @@ export default function Profile() {
               );
             }
 
+            const photo = displayPhoto(entry);
+
             return (
               <Pressable key={entry.id} style={styles.slot} onPress={() => router.push(`/car/${entry.id}`)}>
-                {entry.photoUri ? (
-                  <Image source={{ uri: entry.photoUri }} style={styles.slotImage} contentFit="cover" />
+                {photo ? (
+                  <Image source={{ uri: photo }} style={styles.slotImage} contentFit="cover" />
                 ) : (
                   <View style={styles.slotPlaceholder}>
                     <CarSilhouette width={70} color="#26262E" />
@@ -603,17 +669,17 @@ export default function Profile() {
         <SettingsGroup title="À propos">
           <SettingsRow
             label="Conditions d’utilisation"
-            onPress={() => WebBrowser.openBrowserAsync(LEGAL.terms)}
+            onPress={() => openLegal('terms', LEGAL.terms)}
           />
           <SettingsRow
             label="Politique de confidentialité"
-            onPress={() => WebBrowser.openBrowserAsync(LEGAL.privacy)}
+            onPress={() => openLegal('privacy', LEGAL.privacy)}
             last={!LEGAL.support}
           />
           {LEGAL.support ? (
             <SettingsRow
               label="Aide et contact"
-              onPress={() => WebBrowser.openBrowserAsync(LEGAL.support)}
+              onPress={() => openLegal('support', LEGAL.support)}
               last
             />
           ) : null}

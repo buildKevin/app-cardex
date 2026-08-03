@@ -40,16 +40,25 @@ export default function Paywall() {
 
   const from = context ?? 'unknown';
   const fromLimit = context === 'limit';
+  const fromRestyle = context === 'restyle';
   // Only the onboarding paywall has nothing to go back to.
   const fromOnboarding = context === 'onboarding';
 
   const RevenueCatUI = getPurchasesUi();
   const useRevenueCatUi = process.env.EXPO_PUBLIC_USE_REVENUECAT_UI === '1';
 
+  // How long the player spent on the paywall before deciding either way. A
+  // dismissal after one second is a mis-tap; after thirty it is a price problem.
+  // Stamped in the effect rather than at `useRef(Date.now())`, which reads the
+  // clock during render and is not a pure render.
+  const openedAt = useRef<number | null>(null);
+
   useEffect(() => {
+    openedAt.current = Date.now();
     track(events.paywallViewed, {
       context: from,
       ui: RevenueCatUI && useRevenueCatUi ? 'revenuecat' : 'custom',
+      purchases_available: isPurchasesAvailable(),
     });
   }, [from, RevenueCatUI, useRevenueCatUi]);
 
@@ -62,7 +71,10 @@ export default function Paywall() {
 
   const dismiss = useCallback(() => {
     if (left.current) return;
-    track(events.paywallDismissed, { context: from });
+    track(events.paywallDismissed, {
+      context: from,
+      dwell_ms: openedAt.current ? Date.now() - openedAt.current : null,
+    });
     leave();
   }, [from, leave]);
 
@@ -72,6 +84,7 @@ export default function Paywall() {
       setPro(true);
       track(via === 'purchase' ? events.purchaseCompleted : events.purchaseRestored, {
         context: from,
+        dwell_ms: openedAt.current ? Date.now() - openedAt.current : null,
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       leave();
@@ -123,7 +136,19 @@ export default function Paywall() {
   // ── Fallback paywall ───────────────────────────────────────────────────────
   const buy = async (plan: Plan) => {
     setBusy(true);
-    track(events.purchaseStarted, { context: from, product: plan.package.product.identifier });
+    // The identifier alone does not say what was on offer: the same `yearly` is a
+    // different decision when it is the only plan and when it sits next to a
+    // lifetime. Price is the store's localised string, so it also tells us which
+    // currency the refusals are coming from.
+    const plan_props = {
+      context: from,
+      plan: plan.key,
+      product: plan.package.product.identifier,
+      price: plan.priceString,
+      is_lifetime: plan.isLifetime,
+    };
+    track(events.planSelected, plan_props);
+    track(events.purchaseStarted, plan_props);
 
     const outcome = await purchasePlan(plan.package);
     setBusy(false);
@@ -134,11 +159,11 @@ export default function Paywall() {
         return;
 
       case 'cancelled':
-        track(events.purchaseCancelled, { context: from });
+        track(events.purchaseCancelled, plan_props);
         return;
 
       case 'pending':
-        track(events.purchasePending, { context: from });
+        track(events.purchasePending, plan_props);
         Alert.alert(
           'Paiement en attente',
           'Ton achat doit encore être validé. Pro s’activera automatiquement dès que ce sera fait.',
@@ -146,7 +171,7 @@ export default function Paywall() {
         return;
 
       case 'not_entitled':
-        track(events.purchaseFailed, { context: from, reason: 'not_entitled' });
+        track(events.purchaseFailed, { ...plan_props, reason: 'not_entitled' });
         Alert.alert(
           'Achat enregistré',
           'Le paiement est passé mais l’accès Pro n’est pas encore actif. Réessaie « Restaurer un achat » dans un instant.',
@@ -154,7 +179,7 @@ export default function Paywall() {
         return;
 
       case 'unavailable':
-        track(events.purchaseFailed, { context: from, reason: 'unavailable' });
+        track(events.purchaseFailed, { ...plan_props, reason: 'unavailable' });
         Alert.alert(
           'Achats indisponibles',
           'Configure RevenueCat et lance un build natif pour activer les achats.',
@@ -162,7 +187,7 @@ export default function Paywall() {
         return;
 
       default:
-        track(events.purchaseFailed, { context: from, code: outcome.code });
+        track(events.purchaseFailed, { ...plan_props, code: outcome.code });
         Alert.alert('Achat impossible', outcome.message);
     }
   };
@@ -176,12 +201,16 @@ export default function Paywall() {
       await unlocked('restore');
       return;
     }
+    // Someone who taps restore has already paid, or thinks they have. Every one of
+    // these is a support ticket that has not been written yet.
+    track(events.restoreFailed, { context: from });
     Alert.alert('Rien à restaurer', 'Aucun achat trouvé sur ce compte.');
   };
 
   return (
     <ProPaywall
       fromLimit={fromLimit}
+      fromRestyle={fromRestyle}
       busy={busy}
       onPurchase={buy}
       onRestore={restore}

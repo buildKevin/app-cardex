@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LEGAL, hasLegalLinks } from '../config/release';
 import { getProPlans, type Plan, type PlanKey } from '../services/purchases';
-import { FREE_SCAN_LIMIT } from '../store/useGameStore';
+import { FREE_SCAN_LIMIT, PRO_RESTYLE_LIMIT } from '../store/useGameStore';
 import { colors, gutter, motion, radii, spacing } from '../theme';
 import { Button } from './Button';
 import { Icon } from './Icon';
@@ -23,6 +23,7 @@ import { Text } from './Text';
 
 const PERKS = [
   'Scans illimités',
+  `${PRO_RESTYLE_LIMIT} photos de studio par mois`,
   'Toutes les futures fonctionnalités',
   'Badge Pro sur ton profil',
   'Aucune publicité, jamais',
@@ -43,6 +44,8 @@ const PLAN_NOTE: Record<PlanKey, string> = {
 interface Props {
   /** Where the paywall was opened from, for the copy at the top. */
   fromLimit: boolean;
+  /** Opened from a second photo restyle — a different promise sells it. */
+  fromRestyle?: boolean;
   busy: boolean;
   onPurchase: (plan: Plan) => void;
   onRestore: () => void;
@@ -53,6 +56,7 @@ interface Props {
 
 export function ProPaywall({
   fromLimit,
+  fromRestyle,
   busy,
   onPurchase,
   onRestore,
@@ -88,13 +92,19 @@ export function ProPaywall({
         </Text>
 
         <Text variant="display" style={styles.title}>
-          {fromLimit ? 'Tes 10 scans gratuits\nsont utilisés' : 'Débloque\nCarDex Pro'}
+          {fromRestyle
+            ? 'Ton rendu offert\nest utilisé'
+            : fromLimit
+              ? 'Tes 10 scans gratuits\nsont utilisés'
+              : 'Débloque\nCarDex Pro'}
         </Text>
 
         <Text variant="body" tone="secondary" style={styles.subtitle}>
-          {fromLimit
-            ? `La version gratuite s'arrête à ${FREE_SCAN_LIMIT} scans. Passe Pro pour continuer à collectionner.`
-            : 'Scanne sans limite et garde ta collection à jour.'}
+          {fromRestyle
+            ? `Passe Pro pour ${PRO_RESTYLE_LIMIT} rendus par mois, et mets toute ta collection en valeur.`
+            : fromLimit
+              ? `La version gratuite s'arrête à ${FREE_SCAN_LIMIT} scans. Passe Pro pour continuer à collectionner.`
+              : 'Scanne sans limite et garde ta collection à jour.'}
         </Text>
 
         <View style={styles.perks}>

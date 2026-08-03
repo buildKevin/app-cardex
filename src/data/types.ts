@@ -73,6 +73,12 @@ export interface GarageEntry {
   rarity: Rarity;
   /** Local uri of the photo the user took. */
   photoUri: string | null;
+  /**
+   * The AI rendering, when the player asked for one. Never replaces `photoUri`:
+   * the original stays so the fiche can toggle back to it, and so a re-render
+   * always starts from the photograph rather than from a previous rendering.
+   */
+  styledPhotoUri?: string | null;
   discoveredAt: string;
   xp: number;
   confidence: number;
@@ -80,6 +86,8 @@ export interface GarageEntry {
   remoteId?: string | null;
   /** Path inside the `scans` bucket, when the photo was uploaded. */
   photoPath?: string | null;
+  /** Path inside the `scans` bucket for the rendering, when one exists. */
+  styledPhotoPath?: string | null;
 }
 
 /** What the vision model is allowed to return — nothing more. */

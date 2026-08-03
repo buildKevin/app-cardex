@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { Button } from '../../src/components/Button';
@@ -7,14 +8,16 @@ import { Card } from '../../src/components/Card';
 import { CarSilhouette } from '../../src/components/CarSilhouette';
 import { Icon } from '../../src/components/Icon';
 import { RarityTag } from '../../src/components/RarityTag';
+import { RestyleCta } from '../../src/components/RestyleCta';
 import { Screen } from '../../src/components/Screen';
 import { SpecRow } from '../../src/components/SpecRow';
 import { Text } from '../../src/components/Text';
 import { getBrand } from '../../src/data/brands';
 import { entryFiche } from '../../src/lib/fiche';
 import { formatDiscoveredAt, formatPower, formatPrice } from '../../src/lib/format';
-import { RARITY_LABEL } from '../../src/lib/rarity';
-import { events, track } from '../../src/services/analytics';
+import { displayPhoto, hasBothPhotos } from '../../src/lib/photo';
+import { RARITY_LABEL, rarityColor } from '../../src/lib/rarity';
+import { captureError, events, track } from '../../src/services/analytics';
 import { deletePhoto } from '../../src/services/photo';
 import { deleteRemoteEntry } from '../../src/services/sync';
 import { SHOWCASE_SIZE, useEntryCar, useGameStore } from '../../src/store/useGameStore';
@@ -28,6 +31,30 @@ export default function CarDetail() {
   const showcase = useGameStore((state) => state.showcase);
   const toggleShowcase = useGameStore((state) => state.toggleShowcase);
   const removeEntry = useGameStore((state) => state.removeEntry);
+
+  // A comparison, not a revert: the rendering stays the entry's picture
+  // everywhere else, this only peeks at the photograph behind it.
+  const [showOriginal, setShowOriginal] = useState(false);
+
+  // The card is reachable from the garage grid, the hero, a collection slot, the
+  // showcase and the reveal, so `$screen`'s `previous_screen` is what says which
+  // — this only has to carry what the card itself is.
+  useEffect(() => {
+    if (!entry) return;
+    track(events.carOpened, {
+      make: entry.make,
+      model: entry.model,
+      brand_id: entry.brandId,
+      car_id: entry.carId,
+      rarity: entry.rarity,
+      in_catalogue: entry.carId !== null,
+      source: entry.discovered ? 'community' : entry.carId ? 'catalogue' : 'unknown',
+      has_styled_photo: Boolean(entry.styledPhotoUri),
+      in_showcase: showcase.includes(entry.id),
+    });
+    // Only on arrival: re-firing when the showcase toggles would double-count.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry?.id]);
 
   if (!entry) {
     return (
@@ -44,8 +71,14 @@ export default function CarDetail() {
   const inShowcase = showcase.includes(entry.id);
   const showcaseFull = showcase.length >= SHOWCASE_SIZE;
 
+  const canCompare = hasBothPhotos(entry);
+  const hero = showOriginal && canCompare ? entry.photoUri : displayPhoto(entry);
+
   const onToggleShowcase = () => {
     if (!inShowcase && showcaseFull) {
+      // Hitting a full showcase from here sends the player to the profile to make
+      // room, which is a dead end worth counting rather than guessing at.
+      track(events.showcaseRejected, { reason: 'full', source: 'car' });
       Alert.alert(
         'Vitrine complète',
         `Ta vitrine ne garde que ${SHOWCASE_SIZE} voitures. Retire-en une depuis ton profil.`,
@@ -53,7 +86,12 @@ export default function CarDetail() {
       return;
     }
     toggleShowcase(entry.id);
-    track(events.showcaseUpdated, { added: !inShowcase });
+    track(events.showcaseUpdated, {
+      added: !inShowcase,
+      source: 'car',
+      rarity: entry.rarity,
+      has_styled_photo: Boolean(entry.styledPhotoUri),
+    });
   };
 
   const onDelete = () => {
@@ -64,7 +102,21 @@ export default function CarDetail() {
         style: 'destructive',
         onPress: () => {
           deletePhoto(entry.photoUri);
-          if (entry.remoteId) deleteRemoteEntry(entry.remoteId).catch(() => {});
+          deletePhoto(entry.styledPhotoUri ?? null);
+          if (entry.remoteId) {
+            deleteRemoteEntry(entry.remoteId).catch((error) =>
+              captureError(error, { stage: 'delete_remote_entry' }),
+            );
+          }
+          // Deletions in a collection game are a signal, not routine: a rarity
+          // that gets removed often is one the identification keeps getting wrong.
+          track(events.carRemoved, {
+            rarity: entry.rarity,
+            brand_id: entry.brandId,
+            in_catalogue: entry.carId !== null,
+            was_in_showcase: inShowcase,
+            had_styled_photo: Boolean(entry.styledPhotoUri),
+          });
           removeEntry(entry.id);
           router.back();
         },
@@ -75,8 +127,8 @@ export default function CarDetail() {
   return (
     <Screen scroll bleed>
       <View style={styles.hero}>
-        {entry.photoUri ? (
-          <Image source={{ uri: entry.photoUri }} style={styles.image} contentFit="cover" transition={220} />
+        {hero ? (
+          <Image source={{ uri: hero }} style={styles.image} contentFit="cover" transition={220} />
         ) : (
           <View style={styles.placeholder}>
             <CarSilhouette width={180} color="#22222A" />
@@ -88,6 +140,23 @@ export default function CarDetail() {
             <Icon name="close" size={18} color={colors.text} />
           </View>
         </Pressable>
+
+        {canCompare ? (
+          <Pressable
+            onPress={() => {
+              // How often a player checks the rendering against their own photo
+              // is the closest thing we have to "was the rendering any good".
+              track(events.photoCompared, { showing: showOriginal ? 'styled' : 'original' });
+              setShowOriginal((current) => !current);
+            }}
+            hitSlop={8}
+            style={styles.compare}
+          >
+            <View style={styles.compareChip}>
+              <Text variant="caption">{showOriginal ? 'Voir le rendu' : "Voir l'original"}</Text>
+            </View>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.content}>
@@ -134,6 +203,7 @@ export default function CarDetail() {
             variant={inShowcase ? 'secondary' : 'primary'}
             onPress={onToggleShowcase}
           />
+          <RestyleCta entry={entry} accent={rarityColor(entry.rarity)} source="car" />
           <Button label="Retirer du garage" variant="ghost" size="md" onPress={onDelete} />
         </View>
       </View>
@@ -166,6 +236,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  compare: {
+    position: 'absolute',
+    left: spacing.md,
+    bottom: spacing.md,
+  },
+  compareChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   content: {
     paddingHorizontal: gutter,

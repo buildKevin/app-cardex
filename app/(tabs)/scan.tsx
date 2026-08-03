@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '../../src/components/Button';
 import { Text } from '../../src/components/Text';
-import { events, track } from '../../src/services/analytics';
+import { breadcrumb, captureError, events, track } from '../../src/services/analytics';
 import { preparePhoto } from '../../src/services/photo';
 import { VisionError, identifyCar, visionMode } from '../../src/services/vision';
 import { pushEntry } from '../../src/services/sync';
@@ -41,12 +41,16 @@ export default function Scan() {
   const [active, setActive] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
+  /** Which error the player is retrying after, kept out of state so it never re-renders. */
+  const lastError = useRef<string | null>(null);
 
   const consumeScan = useGameStore((state) => state.consumeScan);
   const addScan = useGameStore((state) => state.addScan);
   const isPro = useGameStore((state) => state.isPro);
   const accountId = useGameStore((state) => state.profile.accountId);
   const markSynced = useGameStore((state) => state.markSynced);
+  const scanCount = useGameStore((state) => state.scanCount);
+  const garage = useGameStore((state) => state.garage);
   const left = useScansLeft();
 
   // Keep the camera mounted only while the tab is on screen.
@@ -76,25 +80,49 @@ export default function Scan() {
     transform: [{ translateY: -60 + sweep.value * 120 }],
   }));
 
+  const askPermission = async () => {
+    track(events.cameraPermissionRequested);
+    const answer = await requestPermission();
+    // The single hardest wall in the app: a refusal here means the player can
+    // never scan anything, and nothing else we measure applies to them.
+    track(events.cameraPermissionAnswered, {
+      granted: answer.granted,
+      can_ask_again: answer.canAskAgain,
+    });
+  };
+
   const capture = async () => {
     if (phase === 'working') return;
 
     if (!isPro && left <= 0) {
-      track(events.scanBlockedByLimit);
+      track(events.scanBlockedByLimit, { source: 'client', scans_used: scanCount });
       router.push('/paywall?context=limit');
       return;
     }
 
+    // A shutter tap while an error is on screen is a retry, and the retry rate on
+    // each error code is what says whether the message is actionable.
+    if (phase === 'error') track(events.scanRetried, { after: lastError.current });
+
     setPhase('working');
     setError(null);
-    track(events.scanStarted, { mode: visionMode });
+    track(events.scanStarted, { mode: visionMode, scans_used: scanCount });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
 
+    // Wall-clock, not model time: this is what the player waits, shutter to card,
+    // and it includes the resize and the upload. p95 on this number is the reason
+    // to change the image size or the model.
+    const startedAt = Date.now();
+
     try {
+      breadcrumb('scan: taking picture');
       const shot = await camera.current?.takePictureAsync({ quality: 0.8 });
       if (!shot?.uri) throw new VisionError('unreadable');
 
+      breadcrumb('scan: preparing photo');
       const photo = await preparePhoto(shot.uri);
+
+      breadcrumb('scan: calling the model', { mode: visionMode });
       const result = await identifyCar(photo.base64);
 
       const entry = addScan(result, photo.uri);
@@ -110,11 +138,22 @@ export default function Scan() {
       track(events.scanSucceeded, {
         make: entry.make,
         model: entry.model,
+        brand_id: entry.brandId,
+        car_id: entry.carId,
         rarity: entry.rarity,
+        xp: entry.xp,
         matched,
         charged,
         discovered: entry.discovered != null,
+        // A pending fiche is only visible to its discoverer, so the two are very
+        // different experiences for the same event.
+        discovered_status: entry.discovered?.status,
         confidence: Math.round(result.confidence * 100) / 100,
+        duration_ms: Date.now() - startedAt,
+        mode: visionMode,
+        // Whether this car was already in the garage. A collection game whose
+        // players mostly rescan the same Clio has a catalogue problem.
+        duplicate: garage.some((item) => item.id !== entry.id && item.carId === entry.carId && entry.carId !== null),
         // Raw strings on a miss: this is the list of cars worth adding next.
         raw_make: matched ? undefined : result.make,
         raw_model: matched ? undefined : result.model,
@@ -129,6 +168,9 @@ export default function Scan() {
       if (accountId) {
         pushEntry(accountId, entry).then((result) => {
           if (result) markSynced(entry.id, result.remoteId, result.photoPath);
+          // A silent failure until now. It costs a player their collection on
+          // reinstall, so it is worth knowing how often it happens.
+          else track(events.syncFailed, { stage: 'push_entry', source: 'scan' });
         });
       }
     } catch (caught) {
@@ -137,12 +179,17 @@ export default function Scan() {
       // The server refused because the free allowance is gone.
       if (code === 'limit') {
         setPhase('idle');
-        track(events.scanBlockedByLimit, { source: 'server' });
+        track(events.scanBlockedByLimit, { source: 'server', scans_used: scanCount });
         router.push('/paywall?context=limit');
         return;
       }
 
-      track(events.scanFailed, { code });
+      track(events.scanFailed, { code, duration_ms: Date.now() - startedAt, mode: visionMode });
+      // `no_car` is the player framing badly, not a bug — filing it as an
+      // exception would bury the real ones. Everything else is ours.
+      if (code !== 'no_car') captureError(caught, { stage: 'scan', code, mode: visionMode });
+
+      lastError.current = code;
       setError(ERROR_COPY[code] ?? ERROR_COPY.unreadable);
       setPhase('error');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
@@ -158,7 +205,7 @@ export default function Scan() {
         <Text variant="body" tone="secondary" style={styles.permissionCopy}>
           CarDex a besoin de la caméra pour identifier les voitures que tu croises.
         </Text>
-        <Button label="Autoriser la caméra" onPress={requestPermission} style={styles.permissionCta} />
+        <Button label="Autoriser la caméra" onPress={askPermission} style={styles.permissionCta} />
       </View>
     );
   }

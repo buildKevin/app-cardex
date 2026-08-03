@@ -13,6 +13,15 @@ import { computeStats, type Stats } from '../lib/stats';
 export const FREE_SCAN_LIMIT = 10;
 export const SHOWCASE_SIZE = 3;
 
+/**
+ * Photo restyles offered before the paywall. One, for the lifetime of the
+ * account — not one a month: the whole point is that the second click is the
+ * one that sells Pro.
+ */
+export const FREE_RESTYLE_LIMIT = 1;
+/** Pro's monthly allowance. Mirrors `begin_restyle()`, which owns the truth. */
+export const PRO_RESTYLE_LIMIT = 30;
+
 interface Profile {
   username: string;
   accountId: string | null;
@@ -34,6 +43,11 @@ interface GameState {
   isPro: boolean;
   /** Counts every scan attempt that reached the vision model. */
   scanCount: number;
+  /**
+   * Successful photo restyles. A UX mirror only — `begin_restyle()` in Postgres
+   * is what actually refuses, exactly like the scan counter.
+   */
+  restyleCount: number;
   garage: GarageEntry[];
   /** Garage entry ids, max SHOWCASE_SIZE. */
   showcase: string[];
@@ -46,7 +60,10 @@ interface GameState {
   /** Local uri of the avatar picture, or null to fall back to the initials. */
   setAvatar: (uri: string | null) => void;
   consumeScan: () => void;
+  consumeRestyle: () => void;
   addScan: (result: VisionResult, photoUri: string | null) => GarageEntry;
+  /** Attaches the AI rendering to an entry, keeping the original photo. */
+  setStyledPhoto: (entryId: string, uri: string, path: string | null) => void;
   toggleShowcase: (entryId: string) => void;
   removeEntry: (entryId: string) => void;
   /** Drops the session and returns to onboarding, keeping the local garage. */
@@ -75,6 +92,7 @@ export const useGameStore = create<GameState>()(
       onboarded: false,
       isPro: false,
       scanCount: 0,
+      restyleCount: 0,
       garage: [],
       showcase: [],
       profile: initialProfile,
@@ -92,6 +110,8 @@ export const useGameStore = create<GameState>()(
       setAvatar: (uri) => set((state) => ({ profile: { ...state.profile, avatarUri: uri } })),
 
       consumeScan: () => set((state) => ({ scanCount: state.scanCount + 1 })),
+
+      consumeRestyle: () => set((state) => ({ restyleCount: state.restyleCount + 1 })),
 
       addScan: (result, photoUri) => {
         const { car, brand, discovered } = resolveScan(result);
@@ -119,6 +139,13 @@ export const useGameStore = create<GameState>()(
         set((state) => ({ garage: [entry, ...state.garage] }));
         return entry;
       },
+
+      setStyledPhoto: (entryId, uri, path) =>
+        set((state) => ({
+          garage: state.garage.map((entry) =>
+            entry.id === entryId ? { ...entry, styledPhotoUri: uri, styledPhotoPath: path } : entry,
+          ),
+        })),
 
       toggleShowcase: (entryId) =>
         set((state) => {
@@ -157,6 +184,9 @@ export const useGameStore = create<GameState>()(
           return { garage: merged };
         }),
 
+      // `restyleCount` deliberately survives: the free rendering is an account
+      // allowance, not garage state, and the server would refuse a second one
+      // anyway. Clearing it here would only show a button that leads to a 402.
       resetGarage: () => set({ garage: [], showcase: [], scanCount: 0 }),
 
       signOutLocal: () =>
@@ -174,6 +204,7 @@ export const useGameStore = create<GameState>()(
           onboarded: false,
           isPro: false,
           scanCount: 0,
+          restyleCount: 0,
           garage: [],
           showcase: [],
           profile: initialProfile,
@@ -225,6 +256,9 @@ export const useGameStore = create<GameState>()(
         onboarded: state.onboarded,
         isPro: state.isPro,
         scanCount: state.scanCount,
+        // No migration needed: zustand shallow-merges persisted over initial
+        // state, so a build that predates this key rehydrates it at 0.
+        restyleCount: state.restyleCount,
         garage: state.garage,
         showcase: state.showcase,
         profile: state.profile,
@@ -245,6 +279,23 @@ export function scansLeft(state: Pick<GameState, 'isPro' | 'scanCount'>): number
 
 export function useScansLeft(): number {
   return useGameStore((state) => scansLeft(state));
+}
+
+/**
+ * Restyles left before the paywall.
+ *
+ * Infinity for Pro on purpose: the monthly allowance is a server-side window
+ * this store does not track, and blocking a subscriber locally on a counter we
+ * cannot reset correctly would lock out a paying player. Pro sees the button,
+ * and the rare 402 at 30/30 is handled where the call is made.
+ */
+export function restylesLeft(state: Pick<GameState, 'isPro' | 'restyleCount'>): number {
+  if (state.isPro) return Infinity;
+  return Math.max(0, FREE_RESTYLE_LIMIT - state.restyleCount);
+}
+
+export function useRestylesLeft(): number {
+  return useGameStore((state) => restylesLeft(state));
 }
 
 export function useStats(): Stats {

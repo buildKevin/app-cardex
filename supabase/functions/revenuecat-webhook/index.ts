@@ -28,6 +28,8 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
+import { Telemetry } from '../_shared/posthog.ts';
+
 /** Entitlement identifier, matching EXPO_PUBLIC_REVENUECAT_ENTITLEMENT. */
 const ENTITLEMENT = Deno.env.get('REVENUECAT_ENTITLEMENT') ?? 'cardex_pro';
 
@@ -77,24 +79,95 @@ Deno.serve(async (req) => {
   const type = String(event.type ?? '');
   const entitlements: string[] = event.entitlement_ids ?? [];
 
+  /**
+   * The subscription lifecycle, which no app is running to see.
+   *
+   * A renewal, a billing failure and an expiry all happen while CarDex is closed,
+   * so none of them exist in the client's data at all — `purchase_completed` is
+   * the last thing it ever reports about a subscriber. Everything about whether
+   * they *stayed* one is only here.
+   *
+   * `distinctId` is `app_user_id`, which the app sets to the Supabase user id via
+   * `Purchases.logIn()`. Purchases made before sign-in arrive under a RevenueCat
+   * anonymous id, and those genuinely belong to nobody we know yet.
+   */
+  const subscriber = typeof event.app_user_id === 'string' && UUID.test(event.app_user_id)
+    ? event.app_user_id
+    : null;
+  const telemetry = new Telemetry(subscriber);
+  /**
+   * RevenueCat's own event id (a uuid), used as the PostHog dedupe key.
+   *
+   * `setPro` throws on a database error so RevenueCat retries — right for the
+   * database, wrong for analytics, because the retry would count the same renewal
+   * twice. Passing a stable uuid makes the second delivery a no-op on ingest.
+   *
+   * Only `subscription_event` carries it, because that is the one that gets summed.
+   * A duplicated `$set` re-sets identical values, and a duplicated exception folds
+   * into the same issue — neither distorts anything, and inventing derived uuids
+   * for them would risk a malformed key dropping the event we actually need.
+   */
+  const deliveryId = typeof event.id === 'string' ? event.id : undefined;
+
+  const revenue = {
+    revenuecat_event: type,
+    store: event.store ?? null,
+    product_id: event.product_id ?? null,
+    period_type: event.period_type ?? null,
+    // In the currency the customer actually paid, plus RevenueCat's USD
+    // normalisation — the second is the only one that can be summed across stores.
+    price: event.price ?? null,
+    currency: event.currency ?? null,
+    price_in_usd: event.price_in_purchased_currency ?? null,
+    revenue_usd: event.revenue ?? null,
+    is_trial_conversion: event.is_trial_conversion ?? null,
+    // Present on CANCELLATION and EXPIRATION: the difference between "they chose
+    // to leave" and "their card failed" is the difference between a product
+    // problem and a dunning problem.
+    cancel_reason: event.cancel_reason ?? null,
+    expiration_reason: event.expiration_reason ?? null,
+    environment: event.environment ?? null,
+  };
+
+  const finish = async (body: unknown, status = 200) => {
+    await telemetry.flush();
+    return json(body, status);
+  };
+
   // TRANSFER moves entitlements between accounts. Handled first and separately,
   // because leaving the old account Pro would hand out a second free ride.
   if (type === 'TRANSFER') {
     const admin = adminClient();
     await setPro(admin, event.transferred_from ?? [], false);
     await setPro(admin, event.transferred_to ?? [], true);
-    return json({ ok: true, type });
+    telemetry.capture('subscription_transferred', revenue);
+    return finish({ ok: true, type });
   }
 
   // Some event types (TEST, SUBSCRIBER_ALIAS, INVOICE_ISSUANCE…) carry no
   // entitlement change. Acknowledge them so RevenueCat stops retrying.
   const grants = GRANTS.has(type);
   const revokes = REVOKES.has(type);
-  if (!grants && !revokes) return json({ ok: true, ignored: type });
+
+  // Captured even when ignored for `is_pro` purposes: CANCELLATION changes
+  // nothing here — access runs to the end of the paid period — but it is the
+  // earliest possible warning that a subscriber has decided to leave, and
+  // dropping it silently means only ever learning about churn a month late.
+  telemetry.capture('subscription_event', {
+    ...revenue,
+    entitlements,
+    grants_pro: grants,
+    revokes_pro: revokes,
+    // TEST events and other-entitlement events would otherwise pollute revenue
+    // numbers that look real.
+    affects_pro: (grants || revokes) && (entitlements.length === 0 || entitlements.includes(ENTITLEMENT)),
+  }, deliveryId);
+
+  if (!grants && !revokes) return finish({ ok: true, ignored: type });
 
   // An event about some other entitlement must not touch Pro.
   if (entitlements.length > 0 && !entitlements.includes(ENTITLEMENT)) {
-    return json({ ok: true, ignored: 'other_entitlement' });
+    return finish({ ok: true, ignored: 'other_entitlement' });
   }
 
   // A grant whose expiry is already in the past is a replay of an old event.
@@ -103,7 +176,26 @@ Deno.serve(async (req) => {
   const isPro = grants && (expiresAt === null || expiresAt > Date.now());
 
   const updated = await setPro(adminClient(), [event.app_user_id, ...(event.aliases ?? [])], isPro);
-  return json({ ok: true, type, is_pro: isPro, updated });
+
+  // The person property, from the only place that knows. `begin_scan()` reads
+  // `users.is_pro` and the client is forbidden from writing it — the same reason
+  // applies to the property a PostHog cohort is built on.
+  telemetry.capture('$set', {
+    $set: { is_pro: isPro, pro_product: event.product_id ?? null, pro_store: event.store ?? null },
+  });
+
+  // Grants only: a revoke that matched nothing is usually an expiry for an
+  // anonymous id that never had a row, which is expected and not a problem.
+  if (updated === 0 && isPro) {
+    // A grant that matched no row is a paying customer whose Pro never reached
+    // Postgres — they will be refused at scan 11 with a valid subscription.
+    telemetry.captureError('SubscriberRowNotFound', `no users row for ${type}`, {
+      ...revenue,
+      is_pro: isPro,
+    });
+  }
+
+  return finish({ ok: true, type, is_pro: isPro, updated });
 });
 
 function adminClient() {

@@ -1,8 +1,8 @@
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Dimensions, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,14 +10,16 @@ import { Button } from '../src/components/Button';
 import { CarSilhouette } from '../src/components/CarSilhouette';
 import { Glow } from '../src/components/Glow';
 import { RarityTag } from '../src/components/RarityTag';
+import { RestyleCta } from '../src/components/RestyleCta';
 import { Text } from '../src/components/Text';
 import { getBrand } from '../src/data/brands';
 import { entryFiche } from '../src/lib/fiche';
 import { formatPower } from '../src/lib/format';
+import { displayPhoto } from '../src/lib/photo';
 import { rarityColor } from '../src/lib/rarity';
 import { events, track } from '../src/services/analytics';
 import { useEntryCar, useGameStore, useStats } from '../src/store/useGameStore';
-import { colors, gutter, motion, radii, spacing } from '../src/theme';
+import { colors, gutter, motion, radii, spacing, withAlpha } from '../src/theme';
 
 const { width } = Dimensions.get('window');
 
@@ -28,12 +30,69 @@ export default function Reveal() {
   const { entry, car } = useEntryCar(entryId);
   const garage = useGameStore((state) => state.garage);
   const stats = useStats();
+  const photo = entry ? displayPhoto(entry) : null;
+
+  const level = stats.progress.level;
+  const knownLevel = useRef<number | null>(null);
+
+  const brandProgress = entry?.brandId ? stats.brands[entry.brandId] : undefined;
+  // This scan finished the set if the brand is now full and this is our first
+  // copy of the car — otherwise a duplicate would re-trigger the message.
+  // Hoisted above the early return so the effects below can read it.
+  const isFirstCopy = entry
+    ? garage.filter((item) => item.carId === entry.carId).length === 1
+    : false;
+  const justCompleted =
+    brandProgress?.complete === true && entry?.carId != null && isFirstCopy;
 
   useEffect(() => {
     if (!entry) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    track(events.carRevealed, { rarity: entry.rarity, matched: entry.carId !== null });
-  }, [entry]);
+    track(events.carRevealed, {
+      rarity: entry.rarity,
+      matched: entry.carId !== null,
+      make: entry.make,
+      model: entry.model,
+      brand_id: entry.brandId,
+      xp: entry.xp,
+      source: entry.discovered ? 'community' : entry.carId ? 'catalogue' : 'unknown',
+      cars_after: stats.cars,
+      level_after: level,
+    });
+    // Only on the entry, not on every stats recomputation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entry?.id]);
+
+  /**
+   * Levelling up and finishing a collection are the two rewards the whole game is
+   * built around, and neither had an event — so "do players who complete a
+   * collection convert better?" was unanswerable. Fired here rather than in the
+   * store because this is where the player is actually told.
+   */
+  useEffect(() => {
+    if (knownLevel.current === null) {
+      knownLevel.current = level;
+      return;
+    }
+    if (level <= knownLevel.current) return;
+    knownLevel.current = level;
+    track(events.levelReached, { level, xp: stats.xp, cars: stats.cars });
+  }, [level, stats.xp, stats.cars]);
+
+  useEffect(() => {
+    if (!justCompleted || !entry?.brandId) return;
+    track(events.collectionCompleted, {
+      brand_id: entry.brandId,
+      make: entry.make,
+      completed_brands: stats.completedBrands,
+      cars: stats.cars,
+    });
+    // The badge is derived from the completed collection, so it unlocks in the
+    // same instant — but it is a separate reward to the player, and a funnel
+    // that mixes the two cannot tell which one they came back for.
+    track(events.badgeUnlocked, { badge_id: entry.brandId, kind: 'brand' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justCompleted, entry?.brandId]);
 
   if (!entry) {
     return (
@@ -48,15 +107,30 @@ export default function Reveal() {
   const accent = rarityColor(entry.rarity);
   const brand = getBrand(entry.brandId);
   const fiche = entryFiche(entry, car, brand);
-  const brandProgress = entry.brandId ? stats.brands[entry.brandId] : undefined;
 
-  // This scan finished the set if the brand is now full and this is our first
-  // copy of the car — otherwise a duplicate would re-trigger the message.
-  const isFirstCopy = garage.filter((item) => item.carId === entry.carId).length === 1;
-  const justCompleted = brandProgress?.complete === true && entry.carId !== null && isFirstCopy;
+  /**
+   * Which way out of the reveal the player takes.
+   *
+   * The retention question for the whole app: straight back to the camera is a
+   * player in the loop, and off to the garage is a player who stopped. Tapping
+   * the restyle CTA instead is a third answer, reported by `RestyleCta`.
+   */
+  const leave = (via: 'scan_again' | 'garage') => {
+    track(events.revealDismissed, { via, rarity: entry.rarity, just_completed: justCompleted });
+    if (via === 'scan_again') router.back();
+    else router.navigate('/(tabs)');
+  };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + spacing.xl }]}>
+    // Scrollable rather than a fixed column: card + CTA + two buttons overflow a
+    // 4.7" screen once the "not in the catalogue" note is showing, and
+    // `marginTop: auto` on the footer silently clipped it. `flexGrow: 1` keeps
+    // the footer pinned to the bottom whenever there IS room.
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl }]}
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.glow} pointerEvents="none">
         <Glow color={accent} width={width * 1.4} />
       </View>
@@ -69,11 +143,11 @@ export default function Reveal() {
 
       <Animated.View
         entering={ZoomIn.delay(80).duration(motion.reveal)}
-        style={[styles.card, { borderColor: `${accent}44` }]}
+        style={[styles.card, { borderColor: withAlpha(accent, 0.27) }]}
       >
         <View style={styles.media}>
-          {entry.photoUri ? (
-            <Image source={{ uri: entry.photoUri }} style={styles.image} contentFit="cover" transition={280} />
+          {photo ? (
+            <Image source={{ uri: photo }} style={styles.image} contentFit="cover" transition={280} />
           ) : (
             <CarSilhouette width={width * 0.5} color="#24242C" />
           )}
@@ -135,15 +209,18 @@ export default function Reveal() {
         entering={FadeInDown.delay(440).duration(motion.base)}
         style={[styles.footer, { paddingBottom: insets.bottom + spacing.xl }]}
       >
-        <Button label="Scanner à nouveau" size="lg" onPress={() => router.back()} />
+        {/* Above the buttons on purpose: this is the moment the player is
+            looking at their own photo and judging it. */}
+        <RestyleCta entry={entry} accent={accent} source="reveal" />
+        <Button label="Scanner à nouveau" size="lg" onPress={() => leave('scan_again')} />
         <Button
           label="Voir mon garage"
           variant="ghost"
           size="md"
-          onPress={() => router.navigate('/(tabs)')}
+          onPress={() => leave('garage')}
         />
       </Animated.View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -153,6 +230,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  content: {
+    flexGrow: 1,
     paddingHorizontal: gutter,
     alignItems: 'center',
   },

@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../src/components/Button';
 import { CarSilhouette } from '../src/components/CarSilhouette';
 import { Text } from '../src/components/Text';
-import { events, identify, track } from '../src/services/analytics';
+import { captureError, events, identify, track } from '../src/services/analytics';
 import {
   SignInCancelled,
   isAppleSignInAvailable,
@@ -84,18 +84,41 @@ export default function Onboarding() {
     if (next !== page) setPage(next);
   };
 
+  // Where the three slides lose people, which is the only thing that would make
+  // us cut one. Reported on arrival, so slide 0 fires alongside the start event.
+  useEffect(() => {
+    track(events.onboardingSlideViewed, {
+      index: page,
+      title: SLIDES[page]?.title,
+      is_last: page === SLIDES.length - 1,
+    });
+  }, [page]);
+
   const finish = (account: Account) => {
     setAccount(account.id, account.email, account.provider);
     if (account.suggestedName) setUsername(account.suggestedName);
-    identify(account.id, { provider: account.provider });
-    track(events.signedIn, { provider: account.provider });
+    identify(account.id, {
+      provider: account.provider,
+      // Not the address itself: `identify` does not send it, and knowing whether
+      // a provider hands one over is what actually tells us if Apple's private
+      // relay is costing us the ability to contact anyone.
+      has_email: Boolean(account.email),
+      apple_available: appleAvailable,
+    });
+    track(events.signedIn, { provider: account.provider, has_email: Boolean(account.email) });
     completeOnboarding();
-    track(events.onboardingCompleted);
+    track(events.onboardingCompleted, {
+      provider: account.provider,
+      // The whole point of the skip button: how many players refuse an account.
+      skipped_account: account.provider === 'local',
+    });
 
     // Not awaited: a returning player should reach the app immediately, and the
     // garage fills in behind them. Local accounts have nothing to reconcile.
     if (account.provider !== 'local') {
-      restoreGarage(account.id).catch(() => {});
+      restoreGarage(account.id)
+        .then(({ pulled, pushed }) => track(events.garageRestored, { pulled, pushed }))
+        .catch((error) => captureError(error, { stage: 'restore_garage' }));
     }
 
     router.replace('/paywall?context=onboarding');
@@ -103,11 +126,19 @@ export default function Onboarding() {
 
   const run = async (key: Provider | 'skip', task: () => Promise<Account>) => {
     setPending(key);
+    track(events.signInStarted, { provider: key });
     try {
       finish(await task());
     } catch (error: any) {
       // Backing out of the Apple sheet is not a failure worth an alert.
-      if (!(error instanceof SignInCancelled)) {
+      if (error instanceof SignInCancelled) {
+        track(events.signInCancelled, { provider: key });
+      } else {
+        // Both, and on purpose: the event is what a funnel counts, the exception
+        // is what tells us *why* — a refused Apple token and a dead network fail
+        // identically from here, and only the stack trace separates them.
+        track(events.signInFailed, { provider: key, reason: error?.message });
+        captureError(error, { stage: 'sign_in', provider: key });
         Alert.alert('Connexion impossible', error?.message ?? 'Réessaie dans un instant.');
       }
     } finally {

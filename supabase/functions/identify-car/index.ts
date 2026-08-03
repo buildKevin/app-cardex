@@ -17,10 +17,12 @@
  * ~95% of scans that hit the catalogue.
  *
  * Deploy: supabase functions deploy identify-car
- * Secrets: supabase secrets set OPENAI_API_KEY=sk-...
+ * Secrets: supabase secrets set OPENAI_API_KEY=sk-... POSTHOG_KEY=phc_...
  */
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+import { Telemetry } from '../_shared/posthog.ts';
 
 const OPENAI_KEY = Deno.env.get('OPENAI_API_KEY') ?? '';
 const MODEL = Deno.env.get('VISION_MODEL') ?? 'gpt-4o-mini';
@@ -191,14 +193,26 @@ Deno.serve(async (req) => {
   const { data: userData, error: userError } = await supabase.auth.getUser(token);
   if (userError || !userData.user) return json({ error: 'unauthorized' }, 401);
 
+  const telemetry = new Telemetry(userData.user.id);
+  /**
+   * Every exit after this point goes through here.
+   *
+   * The flush has to be awaited: an edge isolate can be frozen the moment it
+   * responds, and a queued batch in a frozen isolate is a batch nobody ever sees.
+   */
+  const finish = async (body: unknown, status = 200) => {
+    await telemetry.flush();
+    return json(body, status);
+  };
+
   let image: unknown;
   try {
     ({ image } = await req.json());
   } catch {
-    return json({ error: 'bad_request' }, 400);
+    return finish({ error: 'bad_request' }, 400);
   }
   if (typeof image !== 'string' || image.length < 100) {
-    return json({ error: 'bad_request' }, 400);
+    return finish({ error: 'bad_request' }, 400);
   }
 
   // Phase 1 — decided by the database, before we spend anything on the model.
@@ -207,10 +221,31 @@ Deno.serve(async (req) => {
     p_free_limit: FREE_SCAN_LIMIT,
     p_call_ceiling: VISION_CALL_CEILING,
   });
-  if (beginError) return json({ error: 'server_error' }, 500);
-  if (!allowed) return json({ error: 'scan_limit_reached' }, 402);
+  if (beginError) {
+    telemetry.captureError('BeginScanFailed', beginError.message, { stage: 'begin_scan' });
+    return finish({ error: 'server_error' }, 500);
+  }
+  if (!allowed) {
+    // The refusal that actually holds. The client mirrors this limit for UX, so a
+    // gap between the two counts is a bug in the mirror — and this is the only
+    // number that says whether players are hitting the wall or the paywall first.
+    telemetry.capture('scan_refused_server', {
+      free_limit: FREE_SCAN_LIMIT,
+      call_ceiling: VISION_CALL_CEILING,
+    });
+    return finish({ error: 'scan_limit_reached' }, 402);
+  }
 
-  if (!OPENAI_KEY) return json({ error: 'vision_not_configured' }, 503);
+  if (!OPENAI_KEY) {
+    telemetry.captureError('VisionNotConfigured', 'OPENAI_API_KEY is not set', {
+      stage: 'vision',
+    });
+    return finish({ error: 'vision_not_configured' }, 503);
+  }
+
+  // Model time, isolated from the upload and the database round trips. This is
+  // the number that decides whether the model or the image size is the problem.
+  const visionStartedAt = Date.now();
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -234,20 +269,52 @@ Deno.serve(async (req) => {
     }),
   });
 
+  const visionMs = Date.now() - visionStartedAt;
+
   if (!response.ok) {
-    return json({ error: 'vision_failed', status: response.status }, 502);
+    // A 429 and a 500 from OpenAI need completely different responses from us, and
+    // the client only ever sees "network". The status is the whole diagnosis.
+    telemetry.captureError('VisionFailed', `OpenAI returned ${response.status}`, {
+      stage: 'vision',
+      status: response.status,
+      model: MODEL,
+      duration_ms: visionMs,
+    });
+    return finish({ error: 'vision_failed', status: response.status }, 502);
   }
 
   const payload = await response.json();
   const text = payload?.choices?.[0]?.message?.content;
-  if (typeof text !== 'string') return json({ error: 'vision_unreadable' }, 502);
+  if (typeof text !== 'string') {
+    telemetry.captureError('VisionUnreadable', 'no message content', {
+      stage: 'vision',
+      duration_ms: visionMs,
+    });
+    return finish({ error: 'vision_unreadable' }, 502);
+  }
 
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(text);
   } catch {
-    return json({ error: 'vision_unreadable' }, 502);
+    telemetry.captureError('VisionUnreadable', 'response was not JSON', {
+      stage: 'vision',
+      duration_ms: visionMs,
+    });
+    return finish({ error: 'vision_unreadable' }, 502);
   }
+
+  // Tokens are what the bill is denominated in, so they belong on the event that
+  // caused them — a per-player cost curve is not reconstructible from the
+  // OpenAI dashboard alone.
+  telemetry.capture('vision_called', {
+    model: MODEL,
+    duration_ms: visionMs,
+    prompt_tokens: payload?.usage?.prompt_tokens ?? null,
+    completion_tokens: payload?.usage?.completion_tokens ?? null,
+    total_tokens: payload?.usage?.total_tokens ?? null,
+    image_bytes: image.length,
+  });
 
   const make = typeof parsed.make === 'string' ? parsed.make : null;
   const model = typeof parsed.model === 'string' ? parsed.model : null;
@@ -282,8 +349,32 @@ Deno.serve(async (req) => {
         p_user_id: userData.user.id,
       });
       fiche = (touched as Record<string, unknown> | null) ?? (existing as Record<string, unknown>);
+
+      const promoted = (fiche as Record<string, unknown> | null)?.status === 'confirmed';
+      telemetry.capture('discovered_car_served', {
+        make,
+        model,
+        fiche_id: (existing as Record<string, unknown>).id,
+        // A fiche crossing into `confirmed` is the moment it becomes visible to
+        // everyone, and the only place that transition can be observed.
+        promoted,
+      });
     } else {
+      // The second model call. It only runs on a catalogue miss, so its rate IS
+      // the catalogue's coverage gap — and it is billed on top of every scan that
+      // triggers it, which makes that gap a line item.
+      const ratingStartedAt = Date.now();
       const rated = await rateCar(make, model);
+      telemetry.capture('rating_called', {
+        make,
+        model,
+        duration_ms: Date.now() - ratingStartedAt,
+        // `false` means the model did not know the car either: the scan stays
+        // free, and this is the list of cars nothing can identify.
+        rated: rated !== null,
+        rarity: rated?.rarity ?? null,
+      });
+
       if (rated) {
         const { data: collectionId } = await supabase.rpc('match_collection_id', { p_make: make });
         const { data: created } = await supabase.rpc('record_discovered_car', {
@@ -308,11 +399,33 @@ Deno.serve(async (req) => {
   // A rated car is a real result, so it costs a scan like a catalogue hit. What
   // stays free is the case we cannot answer at all: no catalogue row and a model
   // that does not know the car either is our gap, not the player's.
-  if (carId || fiche) {
+  const charged = carId !== null || fiche !== null;
+  if (charged) {
     await supabase.rpc('commit_scan', { p_user_id: userData.user.id });
   }
 
-  return json({
+  /**
+   * The server's own verdict on the scan, which is the one that governs billing.
+   *
+   * The client fires `scan_succeeded` too, and on purpose: this one is authoritative
+   * about what was charged, and the pair is what catches a client mirror that has
+   * drifted out of step with the accounting here.
+   */
+  telemetry.capture('scan_resolved', {
+    matched: carId !== null,
+    charged,
+    // The three-way outcome the whole two-call design exists to produce.
+    outcome: carId ? 'catalogue' : fiche ? 'discovered' : 'unidentified',
+    car_id: carId,
+    confidence,
+    // Raw model strings, only when the catalogue missed. This is the backlog:
+    // the most frequent pair here is the next car worth adding to `cars.ts`.
+    raw_make: carId ? undefined : make,
+    raw_model: carId ? undefined : model,
+    total_duration_ms: Date.now() - visionStartedAt,
+  });
+
+  return finish({
     make,
     model,
     generation: parsed.generation ?? null,
@@ -323,6 +436,6 @@ Deno.serve(async (req) => {
     // Present (possibly null) whenever the catalogue missed, so the client can
     // tell "the server rated it" from "no server was involved".
     discovered: carId ? undefined : fiche ? ficheResponse(fiche) : null,
-    charged: carId !== null || fiche !== null,
+    charged,
   });
 });

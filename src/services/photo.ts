@@ -2,11 +2,14 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import { createId } from '../lib/id';
+import { captureError, events, track } from './analytics';
 
 /** Wide enough for the vision model, small enough to upload on mobile data. */
 const MAX_WIDTH = 1024;
 const QUALITY = 0.7;
 const DIR_NAME = 'photos';
+/** AI renderings, kept apart so a purge can tell them from the originals. */
+const STYLED_DIR_NAME = 'styled';
 
 /** The avatar is never shown larger than 64pt, so this is generous already. */
 const AVATAR_WIDTH = 256;
@@ -105,8 +108,12 @@ export async function preparePhoto(sourceUri: string): Promise<PreparedPhoto> {
     await new File(result.uri).copy(destination);
     uri = destination.uri;
   } catch (error) {
-    // Non-fatal: the cache uri still works for this session.
+    // Non-fatal *this session*: the cache uri works until the OS reclaims it, and
+    // then the card loses its photo. Silent until now, which is why nobody knew
+    // whether a garage full of silhouettes was this or a failed sync.
     if (__DEV__) console.warn('[photo] could not persist photo', error);
+    track(events.photoFailed, { stage: 'persist_photo' });
+    captureError(error, { stage: 'persist_photo' });
   }
 
   return { base64: result.base64 ?? '', uri };
@@ -131,7 +138,35 @@ export async function prepareAvatar(sourceUri: string): Promise<string | null> {
     return destination.uri;
   } catch (error) {
     if (__DEV__) console.warn('[photo] could not persist avatar', error);
+    captureError(error, { stage: 'persist_avatar' });
     return null;
+  }
+}
+
+/**
+ * Downloads an AI rendering next to the garage photos.
+ *
+ * The edge function hands back a signed URL that expires in a day, and the
+ * rendering is what every screen shows from now on — so relying on that URL
+ * would mean a player's picture silently breaking tomorrow, until the next
+ * sign-in re-signed it. Falls back to the remote URL when the copy fails: a
+ * picture that works today beats no picture at all.
+ */
+export async function persistStyledPhoto(url: string, remotePath?: string): Promise<string> {
+  try {
+    // Gemini answers in PNG and OpenAI in JPEG, so the extension comes from the
+    // stored path rather than being assumed.
+    const extension = remotePath?.endsWith('.png') ? 'png' : 'jpg';
+    const destination = new File(documentDirectory(STYLED_DIR_NAME), `${createId()}.${extension}`);
+    const file = await File.downloadFileAsync(url, destination);
+    return file.uri;
+  } catch (error) {
+    if (__DEV__) console.warn('[photo] could not persist rendering', error);
+    // The fallback is the signed URL, which expires tomorrow — so this is a
+    // rendering the player paid for that will break in a day. It has to be loud.
+    track(events.photoFailed, { stage: 'persist_styled_photo' });
+    captureError(error, { stage: 'persist_styled_photo' });
+    return url;
   }
 }
 

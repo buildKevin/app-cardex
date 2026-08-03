@@ -1,4 +1,5 @@
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,6 +8,7 @@ import { Button } from '../src/components/Button';
 import { Screen } from '../src/components/Screen';
 import { Text } from '../src/components/Text';
 import { badgeStates, rankBadges, unlockedBadgeCount } from '../src/data/badges';
+import { events, track } from '../src/services/analytics';
 import { useStats } from '../src/store/useGameStore';
 import { colors, gridItemWidth, gutter, spacing } from '../src/theme';
 
@@ -17,6 +19,13 @@ export default function AllBadges() {
 
   const badges = rankBadges(badgeStates(stats));
   const unlocked = unlockedBadgeCount(stats);
+
+  // Whether anyone goes looking at the full grid is what says if badges are a
+  // goal players chase or decoration they never open.
+  useEffect(() => {
+    track(events.badgesOpened, { unlocked, total: badges.length });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View style={styles.root}>

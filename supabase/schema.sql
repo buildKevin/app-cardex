@@ -53,6 +53,13 @@ create table if not exists public.users (
   -- it, a free user parked at 9/10 could photograph uncatalogued cars forever
   -- and bill us for a model call each time.
   vision_calls integer not null default 0,
+  -- Successful photo restyles. Free's allowance is for the lifetime of the
+  -- account, Pro's is monthly — see begin_restyle().
+  restyle_count integer not null default 0,
+  -- Restyle attempts, successful or not. Same role as vision_calls, and it
+  -- matters more here: an image call costs 10-40x a vision call.
+  restyle_calls integer not null default 0,
+  restyle_period_start date not null default date_trunc('month', now())::date,
   -- Up to three garage ids shown large on the profile.
   showcase    uuid[] not null default '{}',
   created_at  timestamptz not null default now(),
@@ -134,6 +141,10 @@ create table if not exists public.garage (
   rarity        rarity not null default 'common',
   -- Path inside the `scans` storage bucket.
   photo_path    text,
+  -- The AI rendering, kept ALONGSIDE the original rather than replacing it:
+  -- the feature must not be destructive, and a re-render starts from the
+  -- original photograph, never from a previous rendering.
+  styled_photo_path text,
   xp            integer not null default 10,
   confidence    real not null default 0,
   discovered_at timestamptz not null default now()
@@ -393,6 +404,119 @@ end $$;
 -- Superseded by begin_scan/commit_scan; dropped so no caller can rely on the
 -- old single-phase behaviour that charged before knowing the result.
 drop function if exists public.consume_scan(uuid, integer);
+
+-- ─────────────────────────────────────── photo-restyle accounting ───────────
+-- Same two-phase shape as the scan counters, and the reasoning transfers: an
+-- image call costs 10-40x a vision call, so refusing before we pay and charging
+-- only on success matters more here, not less.
+create or replace function public.begin_restyle(
+  p_user_id      uuid,
+  p_free_limit   integer default 1,
+  p_pro_limit    integer default 30,
+  p_call_ceiling integer default 3
+)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_pro     boolean;
+  v_count   integer;
+  v_calls   integer;
+  v_start   date;
+  v_month   date := date_trunc('month', now())::date;
+  v_limit   integer;
+  v_ceiling integer;
+begin
+  select is_pro, restyle_count, restyle_calls, restyle_period_start
+    into v_pro, v_count, v_calls, v_start
+  from public.users where id = p_user_id for update;
+
+  if not found then
+    return false;
+  end if;
+
+  -- Only Pro's window rolls over. A free player gets one rendering *ever*, not
+  -- one a month — rolling their counter would quietly hand out twelve a year
+  -- and there would be no second click that ever reaches the paywall.
+  if v_pro and v_start < v_month then
+    update public.users
+       set restyle_count = 0,
+           restyle_calls = 0,
+           restyle_period_start = v_month,
+           updated_at = now()
+     where id = p_user_id;
+    v_count := 0;
+    v_calls := 0;
+  end if;
+
+  if v_pro then
+    v_limit   := p_pro_limit;
+    -- Pro pays enough that a generous retry margin is cheaper than a support
+    -- thread; the ceiling is only here to bound a script.
+    v_ceiling := p_pro_limit * 2;
+  else
+    v_limit   := p_free_limit;
+    v_ceiling := p_call_ceiling;
+  end if;
+
+  if v_count >= v_limit or v_calls >= v_ceiling then
+    return false;
+  end if;
+
+  update public.users
+     set restyle_calls = restyle_calls + 1, updated_at = now()
+   where id = p_user_id;
+
+  return true;
+end $$;
+
+create or replace function public.commit_restyle(p_user_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.users
+     set restyle_count = restyle_count + 1, updated_at = now()
+   where id = p_user_id;
+end $$;
+
+-- A model call we were never billed for must not count against the ceiling.
+-- begin_restyle() charges before the call; when OpenAI answers with an HTTP
+-- error nothing was generated and nothing was billed, so an outage of ours must
+-- not cost a free player their only attempt. Not called on a timeout: a request
+-- that hung may well have been billed.
+create or replace function public.refund_restyle_call(p_user_id uuid)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  update public.users
+     set restyle_calls = greatest(restyle_calls - 1, 0), updated_at = now()
+   where id = p_user_id;
+end $$;
+
+-- Every counter function is definer and takes p_user_id, so an authenticated
+-- client that could reach one could burn a *stranger's* allowance. Only the
+-- edge functions call them, with the service role.
+revoke execute on function public.begin_restyle(uuid, integer, integer, integer)
+  from public, anon, authenticated;
+revoke execute on function public.commit_restyle(uuid)
+  from public, anon, authenticated;
+revoke execute on function public.refund_restyle_call(uuid)
+  from public, anon, authenticated;
+revoke execute on function public.begin_scan(uuid, integer, integer)
+  from public, anon, authenticated;
+revoke execute on function public.commit_scan(uuid)
+  from public, anon, authenticated;
+
+grant execute on function public.begin_restyle(uuid, integer, integer, integer) to service_role;
+grant execute on function public.commit_restyle(uuid) to service_role;
+grant execute on function public.refund_restyle_call(uuid) to service_role;
+grant execute on function public.begin_scan(uuid, integer, integer) to service_role;
+grant execute on function public.commit_scan(uuid) to service_role;
 
 -- ──────────────────────────────────────────────── discovered-car lookups ────
 -- Reached only when match_car_id() came back empty. Defined down here because

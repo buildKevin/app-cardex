@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -9,6 +10,8 @@ import { EmptyState } from '../src/components/EmptyState';
 import { Icon } from '../src/components/Icon';
 import { Screen } from '../src/components/Screen';
 import { Text } from '../src/components/Text';
+import { displayPhoto } from '../src/lib/photo';
+import { events, track } from '../src/services/analytics';
 import { SHOWCASE_SIZE, useGameStore } from '../src/store/useGameStore';
 import { colors, gridItemWidth, gutter, radii, spacing } from '../src/theme';
 
@@ -21,6 +24,14 @@ export default function ShowcasePicker() {
   const toggleShowcase = useGameStore((state) => state.toggleShowcase);
 
   const full = showcase.length >= SHOWCASE_SIZE;
+
+  // Reaching the picker with an empty garage is the one case where the screen is
+  // useless, and it happens when the profile shows three inviting empty slots.
+  useEffect(() => {
+    track(events.showcaseOpened, { cars: garage.length, selected: showcase.length });
+    // Arrival only — the counts move as the player picks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -39,17 +50,26 @@ export default function ShowcasePicker() {
             {garage.map((entry) => {
               const selected = showcase.includes(entry.id);
               const locked = !selected && full;
+              const photo = displayPhoto(entry);
 
               return (
                 <Pressable
                   key={entry.id}
                   style={[styles.cell, locked && styles.cellLocked]}
-                  onPress={() => toggleShowcase(entry.id)}
+                  onPress={() => {
+                    toggleShowcase(entry.id);
+                    track(events.showcaseUpdated, {
+                      added: !selected,
+                      source: 'picker',
+                      rarity: entry.rarity,
+                      has_styled_photo: Boolean(entry.styledPhotoUri),
+                    });
+                  }}
                   disabled={locked}
                 >
                   <View style={[styles.thumb, selected && styles.thumbSelected]}>
-                    {entry.photoUri ? (
-                      <Image source={{ uri: entry.photoUri }} style={styles.image} contentFit="cover" />
+                    {photo ? (
+                      <Image source={{ uri: photo }} style={styles.image} contentFit="cover" />
                     ) : (
                       <CarSilhouette width={80} color="#24242C" />
                     )}

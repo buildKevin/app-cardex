@@ -31,6 +31,18 @@ export const colors = {
   },
 } as const;
 
+/**
+ * A theme colour at a given opacity.
+ *
+ * Accent-tinted borders and washes were being written as `${accent}44`, which
+ * is a hardcoded style value wearing a disguise — unreadable, and impossible to
+ * grep for. Takes the 6-digit hex the palette and `rarityColor()` both return.
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  const channel = Math.round(Math.min(1, Math.max(0, alpha)) * 255);
+  return `${hex}${channel.toString(16).padStart(2, '0')}`;
+}
+
 export const radii = {
   sm: 10,
   md: 14,

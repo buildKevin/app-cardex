@@ -71,17 +71,68 @@ Puis l'edge function, qui garde la clé OpenAI côté serveur :
 supabase secrets set OPENAI_API_KEY=sk-... && supabase functions deploy identify-car
 ```
 
+Puis `restyle-photo`, qui rejoue la photo du garage dans un décor. Elle réutilise
+le même secret :
+
+```bash
+supabase functions deploy restyle-photo
+```
+
+Elle a besoin d'une clé Gemini, qui a sa propre facturation Google Cloud — le
+tier gratuit ne couvre pas la génération d'images et renvoie un 429
+`RESOURCE_EXHAUSTED` :
+
+```bash
+supabase secrets set GEMINI_API_KEY=...
+```
+
+Sur toute erreur HTTP du fournisseur, le rendu échoue proprement et la tentative
+est remboursée (`refund_restyle_call`) ; le vrai motif est dans
+`supabase functions logs restyle-photo`.
+
+| Variable | Défaut | Rôle |
+| --- | --- | --- |
+| `IMAGE_PROVIDER` | `gemini` si `GEMINI_API_KEY`, sinon `openai` | Bascule de fournisseur |
+| `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image` | Modèle d'édition |
+| `IMAGE_MODEL` | `gpt-image-1` | Voie OpenAI seulement |
+| `IMAGE_QUALITY` | `medium` | Voie OpenAI seulement |
+| `IMAGE_SIZE` | `1536x1024` | Voie OpenAI seulement |
+| `FREE_RESTYLE_LIMIT` | `1` | Pour la durée de vie du compte, pas par mois |
+| `PRO_RESTYLE_LIMIT` | `30` | Par mois, fenêtre gérée par `begin_restyle()` |
+
 Relance `generate-seed.mjs` après chaque modification de `src/data/` — il
 regénère `supabase/seed.sql` depuis le catalogue TypeScript, qui reste la source
 de vérité.
 
 ### RevenueCat
 
-1. Produit non-consommable `cardex_founder_lifetime` à 9,99 € (App Store + Play).
-2. Entitlement `founder`.
-3. Offering `founder` avec le package **Lifetime**.
+1. Trois produits (App Store + Play), tous rattachés au même entitlement :
 
-Les identifiants sont centralisés en haut de `src/services/purchases.ts`.
+   | Package RevenueCat | Prix TTC | Produit de repli |
+   | --- | --- | --- |
+   | Monthly (`$rc_monthly`) | 4,99 €/mois | `monthly` |
+   | Annual (`$rc_annual`) | 29,99 €/an | `yearly` |
+   | Lifetime (`$rc_lifetime`) | 69,99 € | `lifetime` |
+
+   Utilise les packages **intégrés** : `readPlans()` résout d'abord par type de
+   package, ce que RevenueCat garantit pour ces trois-là, et l'identifiant de
+   produit de la troisième colonne n'est qu'un repli pour une offering bâtie
+   avec des packages custom. Tant que le mapping passe par les packages
+   intégrés, l'identifiant côté App Store Connect est libre.
+
+2. Entitlement `cardex_pro`.
+3. Offering `default`, avec les trois packages.
+
+Le lifetime est volontairement à 69,99 € et non au prix d'appel : Pro achète des
+features à coût marginal réel (appels modèle), donc un achat unique bon marché
+revient à vendre une option illimitée sur notre facture. Le plafond mensuel des
+features payantes est ce qui borne l'exposition — voir `begin_scan` côté
+Postgres, et le même patron pour toute feature IA ajoutée ensuite.
+
+Retirer un plan est un changement dashboard seul : `readPlans()` ignore
+proprement un package absent de l'offering, et les acheteurs existants gardent
+leur entitlement. Les identifiants sont centralisés en haut de
+`src/services/purchases.ts`.
 
 ## Architecture
 
@@ -90,7 +141,7 @@ app/                       Routes (expo-router)
   _layout.tsx              Polices, providers, init des services
   index.tsx                Gate : onboarding ou garage
   onboarding.tsx           3 écrans → compte Apple/Google
-  paywall.tsx              Offre Founder (onboarding · limite · profil)
+  paywall.tsx              Offre CarDex Pro (onboarding · limite · profil)
   (tabs)/
     index.tsx              Garage — stats, bouton scanner, découvertes
     collections.tsx        Les 25 marques et leur progression

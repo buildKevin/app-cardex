@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { getCar } from '../data/cars';
 import type { GarageEntry } from '../data/types';
+import { displayPhoto } from '../lib/photo';
 import { rarityColor } from '../lib/rarity';
 import { colors, spacing } from '../theme';
 import { Card } from './Card';
@@ -18,12 +19,13 @@ interface CarTileProps {
 export function CarTile({ entry, onPress }: CarTileProps) {
   const car = getCar(entry.carId);
   const accent = rarityColor(entry.rarity);
+  const photo = displayPhoto(entry);
 
   return (
     <Card onPress={onPress} padded={false}>
       <View style={styles.media}>
-        {entry.photoUri ? (
-          <Image source={{ uri: entry.photoUri }} style={styles.image} contentFit="cover" transition={220} />
+        {photo ? (
+          <Image source={{ uri: photo }} style={styles.image} contentFit="cover" transition={220} />
         ) : (
           <CarSilhouette width={110} color="#22222A" />
         )}

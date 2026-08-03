@@ -1,6 +1,7 @@
 import { File } from 'expo-file-system';
 
 import type { DiscoveredCar, GarageEntry } from '../data/types';
+import { captureError, events, track } from './analytics';
 import { supabase } from './supabase';
 
 /**
@@ -34,9 +35,16 @@ async function uploadPhoto(userId: string, entry: GarageEntry): Promise<string |
       .from(BUCKET)
       .upload(path, await file.bytes(), { contentType: 'image/jpeg', upsert: true });
 
-    return error ? null : path;
-  } catch {
+    // A row without a photo still syncs, so this failure is invisible until the
+    // player reinstalls and finds a garage full of silhouettes.
+    if (error) {
+      track(events.syncFailed, { stage: 'upload_photo', reason: error.message });
+      return null;
+    }
+    return path;
+  } catch (error) {
     // A missing or unreadable photo is not worth failing the row for.
+    captureError(error, { stage: 'upload_photo' });
     return null;
   }
 }
@@ -87,7 +95,12 @@ export async function pushEntry(userId: string, entry: GarageEntry): Promise<Pus
     .select('id')
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    // The row itself, not the picture: this is the failure that actually loses a
+    // car. Callers fire and forget, so without this nobody ever finds out.
+    track(events.syncFailed, { stage: 'insert_garage_row', reason: error?.message });
+    return null;
+  }
   return { remoteId: data.id as string, photoPath };
 }
 
@@ -108,14 +121,24 @@ export async function pullGarage(userId: string): Promise<GarageEntry[]> {
     // supabase-js parses this string at the type level and a concatenated one
     // degrades to an error type.
     .select(
-      'id, car_id, collection_id, make, model, year, rarity, photo_path, xp, confidence, discovered_at, discovered_cars(id, collection_id, make, model, generation, year_from, year_to, power, country, price_new, rarity, status)',
+      'id, car_id, collection_id, make, model, year, rarity, photo_path, styled_photo_path, xp, confidence, discovered_at, discovered_cars(id, collection_id, make, model, generation, year_from, year_to, power, country, price_new, rarity, status)',
     )
     .eq('user_id', userId)
     .order('discovered_at', { ascending: false });
 
-  if (error || !data) return [];
+  if (error || !data) {
+    // Returning an empty garage on a failed pull is indistinguishable from a
+    // genuinely empty account, which is exactly how a reinstall silently loses
+    // a collection instead of retrying on the next sign-in.
+    if (error) track(events.syncFailed, { stage: 'pull_garage', reason: error.message });
+    return [];
+  }
 
-  const paths = data.map((row) => row.photo_path).filter((p): p is string => Boolean(p));
+  // Both pictures in one batch: an entry that was restyled has two, and signing
+  // them separately would double the round trips for no reason.
+  const paths = data
+    .flatMap((row) => [row.photo_path, row.styled_photo_path])
+    .filter((p): p is string => Boolean(p));
   const signed = new Map<string, string>();
 
   if (paths.length) {
@@ -137,6 +160,8 @@ export async function pullGarage(userId: string): Promise<GarageEntry[]> {
     rarity: row.rarity,
     photoUri: row.photo_path ? (signed.get(row.photo_path) ?? null) : null,
     photoPath: row.photo_path,
+    styledPhotoUri: row.styled_photo_path ? (signed.get(row.styled_photo_path) ?? null) : null,
+    styledPhotoPath: row.styled_photo_path,
     discoveredAt: row.discovered_at,
     xp: row.xp,
     confidence: row.confidence,
