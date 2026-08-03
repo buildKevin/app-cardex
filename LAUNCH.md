@@ -32,26 +32,27 @@ pourquoi de chaque ligne.
       (unicité vérifiée sur la forme normalisée). Le code a donc été aligné
       dessus, côté client **et** côté webhook, dans `a6b6c90`. Rien à faire de
       plus, et surtout **ne pas** rattacher les produits à un autre entitlement.
-- [ ] **A3.** App Store Connect → Utilisateurs et accès → Intégrations → **Achats
-      intégrés** → générer une clé `.p8`. **Différente** de `AuthKey_ZNF6FFWLYV.p8`
-      qui sert à eas.
-- [ ] **A4.** RevenueCat → Apps → ajouter une app **App Store** (pas Test Store) :
-      bundle `com.buildkevin.cardex`, et y déposer la clé de A3.
-- [ ] **A5.** RevenueCat → Products → importer les trois ids
-      `com.buildkevin.cardex.pro.{monthly,yearly,lifetime}` et les rattacher à
-      l'entitlement de A2. **Les trois**, lifetime compris.
-- [ ] **A6.** RevenueCat → Offerings → `default`, trois **packages intégrés**
-      (`$rc_monthly`, `$rc_annual`, `$rc_lifetime`), et marquer l'offering
-      **current**. Vérifier qu'on voit bien trois lignes : `readPlans()` ignore
-      silencieusement un package absent, un oubli ne lève aucune erreur.
-- [ ] **A7.** RevenueCat → API keys → copier la clé publique iOS `appl_…` → me la
-      donner.
-- [ ] **A8.** RevenueCat → Integrations → Webhooks → URL
-      `https://ykqdkadtdsdxujgqnbmp.supabase.co/functions/v1/revenuecat-webhook`,
-      header `Authorization` = le secret **brut, sans `Bearer`**.
-- [ ] **A9.** Retirer `EXPO_PUBLIC_REVENUECAT_TEST_KEY` de `.env` avant de tester
-      les vrais prix : elle a priorité au runtime, sinon tu continueras à voir
-      US$99,99.
+- [x] **A3.** ✅ Clé In-App Purchase `SubscriptionKey_SJB33RW6Q2.p8`, à la racine
+      et couverte par `*.p8` dans `.gitignore`.
+- [x] **A4.** ✅ App `CarDex (App Store)` — `app62957df0c2`, bundle
+      `com.buildkevin.cardex`, `subscription_key_configured: true`.
+- [x] **A5.** ✅ Les trois produits créés et rattachés à `CarDex Pro`.
+      L'entitlement porte donc six produits : les trois de l'App Store et les
+      trois de la Test Store, ce qui est voulu — les deux stores partagent
+      l'accès.
+- [x] **A6.** ✅ Offering `default`, `is_current: true`, les trois packages
+      intégrés portant chacun deux produits (App Store + Test Store).
+- [x] **A7.** ✅ `appl_lbhtthoDUeGUbsfKtceaCPHnoAn`, câblée dans `eas.json`.
+- [x] **A8.** ✅ Intégration `CarDex Supabase` (`whintgre8d887a7b3`), sur **tous**
+      les environnements et tous les types d'événement — sandbox inclus, ce qui
+      est nécessaire pour tester depuis TestFlight. Le secret a été régénéré des
+      deux côtés à cette occasion. Authentification vérifiée en conditions
+      réelles : bon secret → 200, mauvais secret → 401, header absent → 401.
+- [ ] **A9.** `EXPO_PUBLIC_REVENUECAT_TEST_KEY` est encore dans `.env`. Elle n'a
+      **aucun effet sur la production** — `eas.json` ne la porte pas et
+      `verify:release` le vérifie — mais elle a priorité en local, donc un test
+      sur simulateur continuera d'afficher US$99,99. À retirer seulement le jour
+      où tu veux voir les vrais prix en dev.
 
 **Pages légales — il reste une chose**
 
@@ -86,7 +87,7 @@ pourquoi de chaque ligne.
 
 ### B — Moi, dès que tu me donnes les valeurs
 
-- [ ] **B1.** Câbler la clé `appl_…` de A7 dans `eas.json` profil `production`
+- [x] **B1.** ✅ Clé `appl_…` câblée dans `eas.json` profil `production`
 - [ ] **B2.** Substituer l'adresse de A10 dans `docs/legal/`
 - [x] **B3.** ✅ La feature restyle est commitée (`7e87144`), l'arbre est propre
 - [ ] **B4.** `npm run verify:release`, puis build local et upload TestFlight
@@ -286,15 +287,19 @@ c'est le point qui casse le plus souvent en conditions réelles.
 ## État actuel du contrôle
 
 ```
-✗ 1 bloquant
-  1. EXPO_PUBLIC_REVENUECAT_IOS_KEY absente
+✓ 0 bloquant
 
-! 1 avertissement
-  1. 22 logos de constructeurs embarqués (5.2.5)
+! 2 avertissements
+  1. icon.png et splash-icon.png sont identiques octet pour octet
+  2. 22 logos de constructeurs embarqués (5.2.5)
 ```
 
-Le bloquant restant est exactement le point 2.2 ci-dessus, et il est le seul long :
-il faut créer les produits dans App Store Connect avant de pouvoir récupérer la clé.
+Plus rien ne bloque techniquement la soumission. Les deux avertissements sont les
+deux décisions A19 et A17 — le contrôle ne peut pas les trancher à ta place.
+
+Ce qui reste avant de soumettre est du contenu, pas de la plomberie : l'adresse de
+contact (A10), les captures (A11, A12), la fiche (A13 à A16), puis le build et la
+série de vérifications C1 à C8 sur un vrai appareil.
 
 ---
 

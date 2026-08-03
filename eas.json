@@ -31,6 +31,7 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://ykqdkadtdsdxujgqnbmp.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_kKbzyPVd4r0wpcv7xJNZSw_2sD0MlI8",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_lbhtthoDUeGUbsfKtceaCPHnoAn",
         "EXPO_PUBLIC_TERMS_URL": "https://playful-text-ba5.notion.site/Conditions-d-utilisation-CarDex-3b1b30ab77048020aa36c37e0107cf7e",
         "EXPO_PUBLIC_PRIVACY_URL": "https://playful-text-ba5.notion.site/Politique-de-confidentialit-CarDex-3b1b30ab770480a1bd2ccc8be82d98a2",
         "EXPO_PUBLIC_SUPPORT_URL": "https://playful-text-ba5.notion.site/Support-CarDex-3b1b30ab77048015aa85efbd94fcd82f",
