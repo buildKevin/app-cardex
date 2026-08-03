@@ -98,8 +98,14 @@ pourquoi de chaque ligne.
       commit. Le raisonnement : se tromper est réversible par une mise à jour,
       retirer préventivement est un coût certain payé au lancement. Corollaire
       non négociable : **aucun nom de marque dans les mots-clés App Store**.
-- [ ] **A18.** Anonymous sign-in sur le projet hébergé — voir § 1.2. **La
-      dernière décision qui reste.**
+- [ ] **A18.** ⚠️ **Décidé (option A), reste un interrupteur à toi** : Supabase →
+      Authentication → Providers → **Anonymous → Enable**. Le code est fait
+      (`eb0cece`) : « Continuer sans compte » crée désormais un vrai utilisateur
+      anonyme. **Sans l'interrupteur, le repli local s'applique et le scan
+      échoue** — c'était le bug : `identify-car` répond 401 à tout ce qui n'est
+      pas un jeton d'utilisateur, donc l'unique parcours annoncé comme sans
+      compte était le seul incapable de scanner, alors que la note de review dit
+      au vérificateur d'appuyer sur ce bouton.
 - [x] **A20.** ✅ Le « à vie » est en *Ready to Submit* : sa localisation, sa
       capture, son prix et sa catégorie fiscale sont donc complets. Les deux
       abonnements restent en *Missing Metadata* avec les **mêmes** métadonnées —
@@ -115,7 +121,19 @@ pourquoi de chaque ligne.
 - [x] **B2.** ✅ `kevinstacchett@gmail.com` substituée dans `docs/legal/`
       (5 occurrences) — la source du repo et les pages Notion concordent
 - [x] **B3.** ✅ La feature restyle est commitée (`7e87144`), l'arbre est propre
-- [ ] **B4.** `npm run verify:release`, puis build local et upload TestFlight
+- [~] **B4.** `buildNumber 10` construit en local et **uploadé sur TestFlight**
+      le 03/08/2026. Il sert à tester les achats et à prendre la capture A11 —
+      **il ne contient pas le correctif A18**, compilé après. Un `buildNumber 11`
+      est nécessaire avant l'examen.
+      Note pour la prochaine fois : l'upload a d'abord échoué sur
+      `getaddrinfo ENOTFOUND api.expo.dev`, purement transitoire. Le build était
+      déjà signé — inutile de le refaire, il suffit de relancer
+      `eas submit --platform ios --profile production --path build-<ts>.ipa`.
+- [ ] **B5.** Localisation du groupe d'abonnements : l'écran *Créer une
+      soumission* refuse avec « votre abonnement doit être envoyé avec
+      l'abonnement groupé associé ». C'est bien un blocage, contrairement à ce
+      que j'avais conclu plus tôt. Monétisation → Abonnements → **le nom du
+      groupe** `CarDex Pro` → Localisations → Français (France).
 
 ### C — À vérifier sur le build réel, avec moi
 
