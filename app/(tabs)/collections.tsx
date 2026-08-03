@@ -4,7 +4,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { BrandRow } from '../../src/components/BrandRow';
 import { CatalogueTile } from '../../src/components/CatalogueTile';
-import { ChipRow, type Chip } from '../../src/components/ChipRow';
+import { Dropdown, type DropdownSection } from '../../src/components/Dropdown';
 import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { TabSwipe } from '../../src/components/TabSwipe';
@@ -20,6 +20,11 @@ import { gridItemWidth, spacing } from '../../src/theme';
 /** Three across, the same sheet as the garage grid. */
 const COLUMNS = 3;
 
+interface Option<T extends string> {
+  value: T;
+  label: string;
+}
+
 /**
  * The two ways of reading the same catalogue: grouped into the sets you complete
  * for a badge, or the whole thing laid out flat.
@@ -28,17 +33,21 @@ const COLUMNS = 3;
  * finish next", which is what the badges are for; the flat sheet answers "how
  * much of the game is there", which grouping hides — 25 rows of 0/5 look
  * identical, 125 tiles with a dozen filled do not.
+ *
+ * The flat sheet is what the screen opens on, showing the cars already caught:
+ * the first question a player has here is "what have I got", and a wall of
+ * anonymous slots is a worse answer to it than a short shelf of their own cars.
  */
 type CollectionView = 'brands' | 'cars';
 
-const VIEWS: Chip<CollectionView>[] = [
-  { value: 'brands', label: 'Par marque' },
+const VIEWS: Option<CollectionView>[] = [
   { value: 'cars', label: 'Toutes les voitures' },
+  { value: 'brands', label: 'Par marque' },
 ];
 
 type BrandFilter = 'all' | 'active' | 'complete';
 
-const BRAND_FILTERS: Chip<BrandFilter>[] = [
+const BRAND_FILTERS: Option<BrandFilter>[] = [
   { value: 'all', label: 'Toutes' },
   { value: 'active', label: 'En cours' },
   { value: 'complete', label: 'Complètes' },
@@ -52,10 +61,10 @@ const BRAND_EMPTY: Record<BrandFilter, string> = {
 
 type CarFilter = 'all' | 'owned' | 'missing';
 
-const CAR_FILTERS: Chip<CarFilter>[] = [
-  { value: 'all', label: 'Toutes' },
+const CAR_FILTERS: Option<CarFilter>[] = [
   { value: 'owned', label: 'Possédées' },
   { value: 'missing', label: 'Manquantes' },
+  { value: 'all', label: 'Toutes' },
 ];
 
 const CAR_EMPTY: Record<CarFilter, string> = {
@@ -64,13 +73,16 @@ const CAR_EMPTY: Record<CarFilter, string> = {
   missing: 'Catalogue complet. Il n’en reste aucune à trouver.',
 };
 
+const labelOf = <T extends string>(options: Option<T>[], value: T) =>
+  options.find((option) => option.value === value)?.label ?? '';
+
 export default function Collections() {
   const router = useRouter();
   const stats = useStats();
   const garage = useGameStore((state) => state.garage);
-  const [view, setView] = useState<CollectionView>('brands');
+  const [view, setView] = useState<CollectionView>('cars');
   const [brandFilter, setBrandFilter] = useState<BrandFilter>('all');
-  const [carFilter, setCarFilter] = useState<CarFilter>('all');
+  const [carFilter, setCarFilter] = useState<CarFilter>('owned');
 
   // Started collections first, then untouched ones — completed drop to the end.
   const ordered = [...BRANDS].sort((a, b) => {
@@ -108,6 +120,59 @@ export default function Collections() {
     return true;
   });
 
+  /**
+   * Which reading players actually use, and what they narrow it to. Both live on
+   * one event because the button is now one control: "opened the flat sheet" and
+   * "asked for the missing ones" are two halves of the same decision.
+   */
+  const announce = (next: { view?: CollectionView; filter?: string }) =>
+    track(events.collectionsViewChanged, {
+      view: next.view ?? view,
+      filter: next.filter ?? (view === 'brands' ? brandFilter : carFilter),
+    });
+
+  const filters: Option<BrandFilter>[] | Option<CarFilter>[] =
+    view === 'brands' ? BRAND_FILTERS : CAR_FILTERS;
+
+  const sections: DropdownSection[] = [
+    {
+      title: 'Affichage',
+      items: VIEWS.map((option) => ({
+        label: option.label,
+        selected: option.value === view,
+        onSelect: () => {
+          announce({ view: option.value });
+          setView(option.value);
+        },
+      })),
+    },
+    {
+      // The filter belongs to the view above it, so the menu only ever offers
+      // the three that apply — the marques' "Complètes" means nothing to a grid
+      // of single cars.
+      title: 'Filtrer',
+      items: filters.map((option) => ({
+        label: option.label,
+        selected: option.value === (view === 'brands' ? brandFilter : carFilter),
+        onSelect: () => {
+          announce({ filter: option.value });
+          if (view === 'brands') setBrandFilter(option.value as BrandFilter);
+          else setCarFilter(option.value as CarFilter);
+        },
+      })),
+    },
+  ];
+
+  const viewLabel = labelOf(VIEWS, view);
+  const filterLabel =
+    view === 'brands'
+      ? brandFilter === 'all'
+        ? ''
+        : labelOf(BRAND_FILTERS, brandFilter)
+      : carFilter === 'all'
+        ? ''
+        : labelOf(CAR_FILTERS, carFilter);
+
   return (
     <TabSwipe>
       <Screen scroll>
@@ -117,16 +182,14 @@ export default function Collections() {
           Cinq voitures par marque. Débloque les cinq pour obtenir le badge.
         </Text>
 
-        <View style={styles.views}>
-          <ChipRow
-            chips={VIEWS}
-            value={view}
-            onChange={(next) => {
-              // Which reading players actually use. If nobody ever leaves the
-              // marques, the flat sheet is a screen we are paying to maintain.
-              if (next !== view) track(events.collectionsViewChanged, { view: next });
-              setView(next);
-            }}
+        <View style={styles.control}>
+          <Dropdown
+            // "Toutes" is the absence of a filter, so it is left unsaid rather
+            // than spelled out — "Toutes les voitures · Toutes" says one thing
+            // twice and reads as a bug.
+            label={filterLabel ? `${viewLabel} · ${filterLabel}` : viewLabel}
+            accessibilityLabel="Changer l’affichage des collections"
+            sections={sections}
           />
         </View>
 
@@ -136,10 +199,6 @@ export default function Collections() {
               title="Marques"
               trailing={`${stats.completedBrands} / ${BRANDS.length} complètes`}
             />
-
-            <View style={styles.filters}>
-              <ChipRow chips={BRAND_FILTERS} value={brandFilter} onChange={setBrandFilter} />
-            </View>
 
             {shownBrands.length === 0 ? (
               <Text variant="body" tone="tertiary">
@@ -177,10 +236,6 @@ export default function Collections() {
               title="Catalogue"
               trailing={`${formatNumber(entryByCarId.size)} / ${formatNumber(CARS.length)}`}
             />
-
-            <View style={styles.filters}>
-              <ChipRow chips={CAR_FILTERS} value={carFilter} onChange={setCarFilter} />
-            </View>
 
             {shownCars.length === 0 ? (
               <Text variant="body" tone="tertiary">
@@ -232,14 +287,11 @@ const styles = StyleSheet.create({
   intro: {
     maxWidth: 300,
   },
-  views: {
+  control: {
     marginTop: spacing.lg,
   },
   section: {
     marginTop: spacing.xxl,
-  },
-  filters: {
-    marginBottom: spacing.lg,
   },
   rows: {
     gap: spacing.md,
