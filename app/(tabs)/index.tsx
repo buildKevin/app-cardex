@@ -8,8 +8,6 @@ import { CarTile } from '../../src/components/CarTile';
 import { GarageHero } from '../../src/components/GarageHero';
 import { Icon } from '../../src/components/Icon';
 import { ProgressBar } from '../../src/components/ProgressBar';
-import { RarityBar } from '../../src/components/RarityBar';
-import { RarityBreakdown } from '../../src/components/RarityBreakdown';
 import { Screen } from '../../src/components/Screen';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { StatBlock } from '../../src/components/StatBlock';
@@ -20,7 +18,7 @@ import { BRANDS } from '../../src/data/brands';
 import { CARS } from '../../src/data/cars';
 import { formatNumber } from '../../src/lib/format';
 import { useGameStore, useStats } from '../../src/store/useGameStore';
-import { colors, gridItemWidth, gutter, motion, radii, spacing } from '../../src/theme';
+import { colors, gridItemWidth, motion, spacing } from '../../src/theme';
 
 /** Three across, like a sheet of stickers. */
 const COLUMNS = 3;
@@ -51,35 +49,25 @@ export default function Garage() {
           onPress={featured ? () => router.push(`/car/${featured.id}`) : undefined}
         />
 
-        <View style={styles.block}>
-          <View style={styles.stats}>
-            <View style={styles.statTile}>
-              <StatBlock label="Voitures" value={formatNumber(stats.cars)} align="center" />
-            </View>
-            <View style={styles.statTile}>
-              <StatBlock label="Niveau" value={String(level)} align="center" />
-            </View>
-            <View style={styles.statTile}>
-              <StatBlock label="XP" value={formatNumber(stats.xp)} align="center" />
-            </View>
-          </View>
+        {/* The cars come first, straight under the last find. Everything that
+            counts them — the collections, the level — reads as a footnote to the
+            collection itself and sits below it.
 
-          <View style={styles.progress}>
-            <ProgressBar ratio={ratio} height={4} />
-            <Text variant="caption" tone="tertiary">
-              {xpToNext > 0
-                ? `${formatNumber(xpToNext)} XP avant le niveau ${level + 1}`
-                : 'Niveau maximum atteint'}
-            </Text>
-          </View>
-        </View>
-
+            No empty state here either: the hero already says the garage is
+            empty, and saying it twice on one screen reads as a bug. */}
         {hasCars ? (
           <View style={styles.block}>
-            <SectionHeader title="Raretés" />
-            <RarityBar counts={stats.rarityCounts} />
-            <View style={styles.legend}>
-              <RarityBreakdown counts={stats.rarityCounts} />
+            <SectionHeader title="Tout le garage" trailing={formatNumber(stats.cars)} />
+            <View style={styles.grid}>
+              {garage.map((entry, index) => (
+                <Animated.View
+                  key={entry.id}
+                  entering={FadeIn.delay(Math.min(index, 8) * 40).duration(motion.base)}
+                  style={styles.cell}
+                >
+                  <CarTile entry={entry} onPress={() => router.push(`/car/${entry.id}`)} />
+                </Animated.View>
+              ))}
             </View>
           </View>
         ) : null}
@@ -103,24 +91,25 @@ export default function Garage() {
           </View>
         </Card>
 
-        {/* No empty state here — the hero already says the garage is empty,
-            and saying it twice on one screen reads as a bug. */}
-        {hasCars ? (
-          <View style={styles.block}>
-            <SectionHeader title="Tout le garage" trailing={formatNumber(stats.cars)} />
-            <View style={styles.grid}>
-              {garage.map((entry, index) => (
-                <Animated.View
-                  key={entry.id}
-                  entering={FadeIn.delay(Math.min(index, 8) * 40).duration(motion.base)}
-                  style={styles.cell}
-                >
-                  <CarTile entry={entry} onPress={() => router.push(`/car/${entry.id}`)} />
-                </Animated.View>
-              ))}
-            </View>
+        {/* Bare, not in tiles: a counter is a readout, and boxing three of them
+            gave the level the same weight as the cars it counts. */}
+        <View style={styles.block}>
+          <SectionHeader title="Progression" />
+          <View style={styles.stats}>
+            <StatBlock label="Voitures" value={formatNumber(stats.cars)} />
+            <StatBlock label="Niveau" value={String(level)} />
+            <StatBlock label="XP" value={formatNumber(stats.xp)} />
           </View>
-        ) : null}
+
+          <View style={styles.progress}>
+            <ProgressBar ratio={ratio} height={4} />
+            <Text variant="caption" tone="tertiary">
+              {xpToNext > 0
+                ? `${formatNumber(xpToNext)} XP avant le niveau ${level + 1}`
+                : 'Niveau maximum atteint'}
+            </Text>
+          </View>
+        </View>
       </Screen>
     </TabSwipe>
   );
@@ -132,21 +121,11 @@ const styles = StyleSheet.create({
   },
   stats: {
     flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  /** Soft grey plate — the counters are a readout, not a card to tap. */
-  statTile: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    paddingVertical: spacing.md,
+    justifyContent: 'space-between',
   },
   progress: {
     marginTop: spacing.lg,
     gap: spacing.sm,
-  },
-  legend: {
-    marginTop: spacing.md,
   },
   cardHead: {
     flexDirection: 'row',

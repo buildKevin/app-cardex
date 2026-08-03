@@ -15,7 +15,7 @@ import { Text } from '../../src/components/Text';
 import { getBrand } from '../../src/data/brands';
 import { entryFiche } from '../../src/lib/fiche';
 import { formatDiscoveredAt, formatPower, formatPrice } from '../../src/lib/format';
-import { displayPhoto, displaySticker, hasBothPhotos } from '../../src/lib/photo';
+import { displayPhoto, hasBothPhotos, isSticker, originalPhoto } from '../../src/lib/photo';
 import { RARITY_LABEL, rarityColor } from '../../src/lib/rarity';
 import { captureError, events, track } from '../../src/services/analytics';
 import { deletePhoto } from '../../src/services/photo';
@@ -32,11 +32,10 @@ export default function CarDetail() {
   const toggleShowcase = useGameStore((state) => state.toggleShowcase);
   const removeEntry = useGameStore((state) => state.removeEntry);
 
-  // A comparison, not a revert: the rendering stays the entry's picture
-  // everywhere else, this only peeks at the photograph behind it.
-  // The fiche leads with the photograph now, and the sticker is the thing you
-  // toggle *to* — the reverse of when the rendering was simply a better photo.
-  const [showSticker, setShowSticker] = useState(false);
+  // A comparison, not a revert: the sticker leads here as it does everywhere
+  // else, and this only peeks at the photograph behind it — making the fiche the
+  // one way back to what the camera actually saw.
+  const [showOriginal, setShowOriginal] = useState(false);
 
   // The card is reachable from the garage grid, the hero, a collection slot, the
   // showcase and the reveal, so `$screen`'s `previous_screen` is what says which
@@ -74,7 +73,7 @@ export default function CarDetail() {
   const showcaseFull = showcase.length >= SHOWCASE_SIZE;
 
   const canCompare = hasBothPhotos(entry);
-  const hero = showSticker && canCompare ? displaySticker(entry) : displayPhoto(entry);
+  const hero = showOriginal && canCompare ? originalPhoto(entry) : displayPhoto(entry);
 
   const onToggleShowcase = () => {
     if (!inShowcase && showcaseFull) {
@@ -128,12 +127,12 @@ export default function CarDetail() {
 
   return (
     <Screen scroll bleed>
-      <View style={styles.hero}>
+      <View style={[styles.hero, isSticker(entry, hero) && styles.heroSticker]}>
         {hero ? (
           <Image
             source={{ uri: hero }}
             style={styles.image}
-            contentFit={showSticker ? 'contain' : 'cover'}
+            contentFit={isSticker(entry, hero) ? 'contain' : 'cover'}
             transition={220}
           />
         ) : (
@@ -153,8 +152,8 @@ export default function CarDetail() {
             onPress={() => {
               // How often a player checks the rendering against their own photo
               // is the closest thing we have to "was the rendering any good".
-              track(events.photoCompared, { showing: showSticker ? 'photo' : 'sticker' });
-              setShowSticker((current) => !current);
+              track(events.photoCompared, { showing: showOriginal ? 'sticker' : 'photo' });
+              setShowOriginal((current) => !current);
             }}
             hitSlop={8}
             style={styles.compare}
@@ -162,7 +161,7 @@ export default function CarDetail() {
             <View style={styles.compareChip}>
               {/* On the dark plate over the photo, so inverted rather than primary. */}
               <Text variant="caption" color={colors.textInverted}>
-                {showSticker ? 'Voir la photo' : 'Voir le sticker'}
+                {showOriginal ? 'Voir le sticker' : 'Voir la photo'}
               </Text>
             </View>
           </Pressable>
@@ -225,6 +224,10 @@ const styles = StyleSheet.create({
   hero: {
     aspectRatio: 4 / 3,
     backgroundColor: colors.surfaceElevated,
+  },
+  /** A die-cut object needs the canvas behind it, not a grey plate. */
+  heroSticker: {
+    backgroundColor: colors.bg,
   },
   image: {
     ...StyleSheet.absoluteFill,

@@ -17,7 +17,7 @@ import { CarSilhouette } from '../../src/components/CarSilhouette';
 import { Icon } from '../../src/components/Icon';
 import { Screen } from '../../src/components/Screen';
 import { Text } from '../../src/components/Text';
-import { displayPhoto, displaySticker } from '../../src/lib/photo';
+import { displayPhoto, originalPhoto } from '../../src/lib/photo';
 import { breadcrumb, captureError, events, track } from '../../src/services/analytics';
 import { persistStyledPhoto } from '../../src/services/photo';
 import { RestyleError, restylePhoto, type RestyleErrorCode } from '../../src/services/restyle';
@@ -75,10 +75,11 @@ export default function Restyle() {
     );
   }
 
-  // Before: the photograph, which is what is about to be redrawn. After: the
-  // sticker, on the plate it will live on everywhere else.
+  // Before: the photograph, which is literally what is about to be redrawn —
+  // even on a re-roll, where `displayPhoto` would hand back the old sticker.
+  // After: the new one.
   const done = phase === 'done';
-  const preview = done ? displaySticker(entry) : displayPhoto(entry);
+  const preview = done ? displayPhoto(entry) : originalPhoto(entry);
 
   const generate = async () => {
     if (phase === 'working') return;

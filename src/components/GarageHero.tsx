@@ -4,8 +4,7 @@ import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { getCar } from '../data/cars';
 import type { GarageEntry } from '../data/types';
 import { formatPower } from '../lib/format';
-import { displayPhoto } from '../lib/photo';
-import { rarityColor } from '../lib/rarity';
+import { displayPhoto, isSticker } from '../lib/photo';
 import { colors, gutter, spacing } from '../theme';
 import { BrandLogo } from './BrandLogo';
 import { Card } from './Card';
@@ -38,15 +37,17 @@ export function GarageHero({ entry, onPress }: GarageHeroProps) {
 
   const car = entry ? getCar(entry.carId) : null;
   const photo = entry ? displayPhoto(entry) : null;
+  const sticker = Boolean(entry && isSticker(entry, photo));
 
   return (
     <Card onPress={onPress} padded={false}>
-      <View style={styles.media}>
+      <View style={[styles.media, sticker && styles.mediaSticker]}>
         {photo ? (
           <Image
             source={{ uri: photo }}
             style={StyleSheet.absoluteFill}
-            contentFit="cover"
+            // A die-cut sticker cropped to fill loses the edge that makes it one.
+            contentFit={sticker ? 'contain' : 'cover'}
             transition={280}
           />
         ) : (
@@ -108,12 +109,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tier: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 3,
+  /** The sticker is the object; a grey plate behind it puts it back in a box. */
+  mediaSticker: {
+    backgroundColor: colors.bg,
   },
   caption: {
     padding: spacing.lg,

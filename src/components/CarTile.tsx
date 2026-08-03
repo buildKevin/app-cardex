@@ -4,7 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 
 import { getCar } from '../data/cars';
 import type { GarageEntry } from '../data/types';
-import { displaySticker, isSticker } from '../lib/photo';
+import { displayPhoto, isSticker } from '../lib/photo';
 import { RARITY_ORDER, rarityColor } from '../lib/rarity';
 import { colors, motion, radii, shadow, spacing } from '../theme';
 import { CarSilhouette } from './CarSilhouette';
@@ -27,7 +27,7 @@ export function CarTile({ entry, onPress }: CarTileProps) {
   const pressed = useSharedValue(0);
 
   const car = getCar(entry.carId);
-  const photo = displaySticker(entry);
+  const photo = displayPhoto(entry);
   const sticker = isSticker(entry, photo);
   // Only the top two tiers get a marker. A dot on every tile is a dot that says
   // nothing, and common is the default state of a garage.

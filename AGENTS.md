@@ -79,17 +79,21 @@ Things that already bit us on SDK 57 / RN 0.86:
   client pushes it first rather than failing. It used to drop the car into one of
   four scenes; the backdrop keys are gone, and with them the list that was
   mirrored by hand on the client and could drift from the server's.
-- **A sticker never replaces the photograph, and the two are shown in different
-  places.** `photo_path` and `styled_photo_path` both live on the row, and
+- **The sticker wins wherever it exists, and never destroys the photograph.**
+  `photo_path` and `styled_photo_path` both live on the row, and
   `src/lib/photo.ts` is the single place that decides which one a screen shows —
   eight screens render an entry's picture, and the first divergence would be a
-  showcase still showing the raw snapshot. `displaySticker()` for grids, the
-  showcase and the collections, because uniformity is the whole effect there;
-  `displayPhoto()` for the garage hero, the fiche and the reveal, which exist to
-  show the moment the player had. `isSticker()` decides `contentFit`: a die-cut
-  sticker cropped with `cover` loses the edge that makes it a sticker. The
-  rendering is also copied to disk (`persistStyledPhoto`), because the signed URL
-  expires in a day and that picture is now the entry's face in every grid.
+  showcase still showing the raw snapshot. `displayPhoto()` is that rule;
+  `originalPhoto()` exists for the only two screens that want the snapshot
+  specifically, the fiche's comparison toggle and the sticker screen showing what
+  is about to be redrawn. Splitting it by screen was tried and reverted: a garage
+  whose grid shows stickers under a hero showing a snapshot reads as two
+  half-finished apps. `isSticker()` decides `contentFit` — a die-cut sticker
+  cropped with `cover` loses the edge that makes it a sticker — and the same flag
+  drops the grey plate behind it, which would put the object back in the box the
+  die-cut took it out of. The rendering is also copied to disk
+  (`persistStyledPhoto`), because the signed URL expires in a day and that
+  picture is now the entry's face.
 - **Sticker accounting mirrors `begin_scan`/`commit_scan`, and must.** An image
   call costs 10-40x a vision call — more now that it runs on OpenAI at
   `quality: high` — so: refuse before paying, charge only on a stored result, and

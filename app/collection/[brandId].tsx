@@ -16,7 +16,7 @@ import { Text } from '../../src/components/Text';
 import { getBrand } from '../../src/data/brands';
 import { CARS_BY_BRAND } from '../../src/data/cars';
 import { formatPower } from '../../src/lib/format';
-import { displaySticker, isSticker } from '../../src/lib/photo';
+import { displayPhoto, isSticker } from '../../src/lib/photo';
 import { colors, gridItemWidth, radii, spacing } from '../../src/theme';
 import { useGameStore, useStats } from '../../src/store/useGameStore';
 
@@ -110,6 +110,10 @@ export default function BrandCollection() {
                       rarity: car.rarity,
                       slot: index + 1,
                       owned: progress.owned,
+                      // The flat catalogue grid fires this too, so the property
+                      // is what separates "curious inside one marque" from
+                      // "browsing the whole sheet".
+                      source: 'brand',
                     })
                   }
                 >
@@ -126,7 +130,7 @@ export default function BrandCollection() {
               );
             }
 
-            const photo = displaySticker(entry);
+            const photo = displayPhoto(entry);
 
             return (
               <Pressable

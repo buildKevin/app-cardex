@@ -29,7 +29,7 @@ import { TabSwitcher } from '../../src/components/TabSwitcher';
 import { Text } from '../../src/components/Text';
 import { badgeStates, rankBadges, unlockedBadgeCount } from '../../src/data/badges';
 import { formatDiscoveredAt, formatNumber } from '../../src/lib/format';
-import { displaySticker, isSticker } from '../../src/lib/photo';
+import { displayPhoto, isSticker } from '../../src/lib/photo';
 import { LEGAL, hasLegalLinks } from '../../src/config/release';
 import { captureError, events, resetAnalytics, track } from '../../src/services/analytics';
 import { deleteAccount, signOut } from '../../src/services/auth';
@@ -486,7 +486,7 @@ export default function Profile() {
               );
             }
 
-            const photo = displaySticker(entry);
+            const photo = displayPhoto(entry);
 
             return (
               <Pressable key={entry.id} style={styles.slot} onPress={() => router.push(`/car/${entry.id}`)}>
