@@ -109,7 +109,20 @@ function scrubSensitive(event: any): any {
 export const events = {
   // Onboarding and auth
   onboardingStarted: 'onboarding_started',
-  onboardingSlideViewed: 'onboarding_slide_viewed',
+  /**
+   * One per question in the conversation. Replaces `onboarding_slide_viewed`,
+   * which measured three swipeable slides that no longer exist — a funnel on it
+   * would count steps that cannot be reached. The old event is gone rather than
+   * reused: its `index` meant "which slide", and quietly repointing it at
+   * "which question" would leave every historical insight silently wrong.
+   */
+  onboardingStepViewed: 'onboarding_step_viewed',
+  /**
+   * The player's own car, as they described it. Fired before the photo, so it
+   * survives a drop-out — which is what makes it the catalogue-growth list:
+   * every `matched: false` here is a car our players own and we cannot name.
+   */
+  onboardingCarDeclared: 'onboarding_car_declared',
   onboardingCompleted: 'onboarding_completed',
   signInStarted: 'sign_in_started',
   signInFailed: 'sign_in_failed',

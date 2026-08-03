@@ -34,6 +34,15 @@ export const colors = {
 
   /** The only real accent: a black primary action on white. */
   accent: '#0A0A0C',
+  /**
+   * The one colour the app raises its voice with.
+   *
+   * Onboarding is a conversation, and a wall of identical grey bubbles hides the
+   * one thing the player has to answer. This marks the words a question is
+   * actually asking, and the bubble that is asking it. Deliberately used on that
+   * screen alone — a highlight that turned up everywhere would stop being one.
+   */
+  highlight: '#2F6BFF',
   danger: '#E5342A',
 
   /** Darkened from their dark-canvas values — a tier has to be legible as
@@ -140,12 +149,26 @@ export const type = {
   hero: { fontFamily: fonts.bold, fontSize: 60, lineHeight: 62, letterSpacing: -3 },
 } as const;
 
-/** Discreet, fluid — never bouncy. */
+/**
+ * Discreet, fluid — never bouncy.
+ *
+ * The last three are the deliberate exceptions, and they are exceptions on
+ * purpose: a collectible app gets exactly two moments where it is allowed to be
+ * loud, and both are the player receiving something. `flash` and `burst` are the
+ * sticker landing, `door` is the garage opening. Everything else in the app
+ * stays on the four durations above.
+ */
 export const motion = {
   fast: 160,
   base: 260,
   slow: 420,
   reveal: 620,
+  /** The white blink an object arrives behind. Any slower reads as a bug. */
+  flash: 90,
+  /** How long the shards take to travel out and fade. */
+  burst: 720,
+  /** A garage door's full travel. Mechanical, so it is slow on purpose. */
+  door: 900,
 } as const;
 
 export type TypeVariant = keyof typeof type;

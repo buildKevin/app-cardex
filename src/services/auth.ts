@@ -16,17 +16,24 @@ export class SignInCancelled extends Error {
 }
 
 /**
- * Whether the native Apple button can be shown. Apple requires the native flow
+ * Whether to offer the native Apple button. Apple requires the native flow
  * rather than a web redirect when the app offers other social logins
  * (App Store Review Guideline 4.8), so this drives what onboarding renders.
+ *
+ * True on every iOS build, and not a capability probe any more.
+ * `AppleAuthentication.isAvailableAsync()` looks like the right question but
+ * answers a narrower one: it reports false when the *binary* carries no
+ * `com.apple.developer.applesignin` entitlement, which is exactly what a
+ * simulator build made before `ios.usesAppleSignIn` was set looks like. It hid
+ * the Apple button on a dev build here while Google stayed — which is both the
+ * confusing direction for us and the expensive one for review. So iOS always
+ * offers it, and `signInWithApple` below surfaces its own error if the build
+ * really cannot. `npm run verify:release` is what guarantees the entitlement is
+ * configured before a store build; a missing one now fails loudly on tap
+ * instead of silently removing the button.
  */
-export async function isAppleSignInAvailable(): Promise<boolean> {
-  if (Platform.OS !== 'ios') return false;
-  try {
-    return await AppleAuthentication.isAvailableAsync();
-  } catch {
-    return false;
-  }
+export function isAppleSignInAvailable(): boolean {
+  return Platform.OS === 'ios';
 }
 
 /**

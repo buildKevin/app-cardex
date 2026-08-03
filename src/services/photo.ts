@@ -50,11 +50,25 @@ export type PickedImage =
   | { status: 'denied' }
   | { status: 'unavailable' };
 
-/**
- * Opens the system picker or the camera and returns a cache uri. Cropping is on
- * and square, because every place we show a picked image is a circle.
- */
-export async function pickImage(source: 'library' | 'camera'): Promise<PickedImage> {
+interface PickOptions {
+  /**
+   * Whether to open the system cropper. On by default: the avatar is shown in a
+   * circle, so a square crop is exactly right there.
+   *
+   * Off for a car. On iOS `allowsEditing` *always* crops to a square — `aspect`
+   * is Android-only — so leaving it on would hand the player a square cutter for
+   * a landscape photograph and take the nose or the tail off the car. The sticker
+   * prompt asks for the whole car in frame, so the whole frame is what we keep;
+   * the square card crops it for display only.
+   */
+  crop?: boolean;
+}
+
+/** Opens the system picker or the camera and returns a cache uri. */
+export async function pickImage(
+  source: 'library' | 'camera',
+  { crop = true }: PickOptions = {},
+): Promise<PickedImage> {
   const sdk = loadPicker();
   if (!sdk) return { status: 'unavailable' };
 
@@ -67,7 +81,7 @@ export async function pickImage(source: 'library' | 'camera'): Promise<PickedIma
 
   const options: import('expo-image-picker').ImagePickerOptions = {
     mediaTypes: ['images'],
-    allowsEditing: true,
+    allowsEditing: crop,
     aspect: [1, 1],
     quality: 1,
   };
