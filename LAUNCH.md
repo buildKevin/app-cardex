@@ -69,9 +69,12 @@ pourquoi de chaque ligne.
       sandbox de façon fiable.
 - [ ] **A12.** **Captures marketing 6,7″** pour la fiche App Store
       (iPhone 15/16/17 Pro Max). Obligatoires, et sans rapport avec A11.
-- [ ] **A13.** Nom, sous-titre, description, mots-clés, catégorie —
-      **rédigés dans `docs/app-store-listing.md`**, il n'y a plus qu'à coller.
-- [ ] **A14.** Classification d'âge — 4+ convient.
+- [~] **A13.** Nom, sous-titre, catégories (Style de vie / Jeux) et droits sur le
+      contenu ✅ faits sur *Informations sur l'app*. **Restent la description, les
+      mots-clés, le texte promo, l'URL de support et le copyright**, qui sont sur
+      la page de la version 1.0, pas là — tout est rédigé dans
+      `docs/app-store-listing.md`, écran 3.
+- [x] **A14.** ✅ Classification d'âge : questionnaire 7 étapes rempli, 4+.
 - [ ] **A15.** **App Privacy** : photos/caméra (fonctionnalité, non liée à
       l'identité), identifiants si PostHog est actif. **Ne pas** déclarer de suivi
       publicitaire, il n'y en a pas.
@@ -82,7 +85,8 @@ pourquoi de chaque ligne.
 
 **Deux décisions et une vérification à l'œil**
 
-- [x] **A17.** ✅ **Décision : on garde les 22 logos pour la v1.** Le repli
+- [x] **A17.** ✅ **Décision : on garde les 22 logos pour la v1**, et *Droits
+      relatifs au contenu* a été renseigné en conséquence. Le repli
       monogramme reste prêt — `<BrandLogo>` le fait déjà pour Mercedes-Benz, Alfa
       Romeo et Land Rover — et se déclenche en vidant `BRAND_LOGO_PATHS`, soit un
       commit. Le raisonnement : se tromper est réversible par une mise à jour,
