@@ -103,7 +103,19 @@ export const useGameStore = create<GameState>()(
       setPro: (value) => set({ isPro: value }),
 
       setAccount: (accountId, email, provider) =>
-        set((state) => ({ profile: { ...state.profile, accountId, email, provider } })),
+        set((state) => ({
+          profile: { ...state.profile, accountId, email, provider },
+          // The free sticker is an *account* allowance — `begin_restyle()` counts
+          // it per `users` row — while this counter lives on the device. Left to
+          // carry over, a brand-new account signing in on a device that had
+          // already spent one found its own welcome sticker refused by a mirror
+          // that knew nothing about it, and onboarding silently handed back the
+          // plain photograph. Nothing is opened up by resetting it: the server
+          // grants the allowance per user row either way, and it is still the
+          // only thing that can refuse.
+          restyleCount:
+            accountId && accountId !== state.profile.accountId ? 0 : state.restyleCount,
+        })),
 
       setUsername: (username) =>
         set((state) => ({ profile: { ...state.profile, username: username.trim() || 'Collectionneur' } })),

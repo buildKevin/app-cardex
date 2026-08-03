@@ -53,7 +53,7 @@ import { persistStyledPhoto, pickImage, preparePhoto } from '../src/services/pho
 import { restoreGarage } from '../src/services/restoreGarage';
 import { RestyleError, restyleAvailable, restylePhoto } from '../src/services/restyle';
 import { pushEntry } from '../src/services/sync';
-import { useGameStore, useGarageEntry, useRestylesLeft } from '../src/store/useGameStore';
+import { useGameStore, useGarageEntry } from '../src/store/useGameStore';
 import { colors, fonts, gutter, motion, radii, spacing, type, withAlpha } from '../src/theme';
 
 /**
@@ -183,6 +183,15 @@ export default function Onboarding() {
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Provider | 'skip' | null>(null);
   const [entryId, setEntryId] = useState<string | undefined>(undefined);
+  /**
+   * Why there is no sticker on the card, when there is none.
+   *
+   * State rather than one more `say()`: everything the conversation said is gone
+   * by the time the payoff draws, so a refused or failed generation used to end
+   * on a card showing the raw photograph with nothing anywhere explaining it —
+   * indistinguishable from the feature simply not working.
+   */
+  const [excuse, setExcuse] = useState<string | null>(null);
 
   // Synchronous, so the Apple button is there on the first paint of the sign-in
   // step rather than appearing a frame late — see the note on it in `auth.ts`.
@@ -198,7 +207,6 @@ export default function Onboarding() {
   const setStyledPhoto = useGameStore((state) => state.setStyledPhoto);
   const consumeRestyle = useGameStore((state) => state.consumeRestyle);
   const isPro = useGameStore((state) => state.isPro);
-  const restylesLeft = useRestylesLeft();
 
   useEffect(() => {
     track(events.onboardingStarted);
@@ -401,13 +409,16 @@ export default function Onboarding() {
       .then(({ pulled, pushed }) => track(events.garageRestored, { pulled, pushed }))
       .catch((error) => captureError(error, { stage: 'restore_garage' }));
 
-    const allowed = restyleAvailable && (isPro || restylesLeft > 0);
-    if (!created || !remoteId || !allowed) {
-      if (created && restyleAvailable && !allowed) {
-        track(events.restyleBlockedByLimit, { source: 'onboarding' });
-        say(STICKER_EXCUSE.limit);
-      } else if (created && !remoteId) {
-        say(STICKER_EXCUSE.not_synced);
+    // The allowance is deliberately *not* pre-checked here. `begin_restyle()`
+    // owns it and refuses before the image call, so asking costs a round trip and
+    // never a generation — whereas `restylesLeft` is a per-device mirror that
+    // knows nothing about the account that signed in three lines ago. It is the
+    // wrong authority at exactly the moment the account is new.
+    if (!created || !restyleAvailable || !remoteId) {
+      if (created && !restyleAvailable) {
+        setExcuse(STICKER_EXCUSE.unconfigured);
+      } else if (created) {
+        setExcuse(STICKER_EXCUSE.not_synced);
       }
       setStep('done');
       return;
@@ -443,6 +454,10 @@ export default function Onboarding() {
 
       if (code === 'limit') {
         track(events.restyleBlockedByLimit, { source: 'onboarding' });
+        // The server is the authority and it just said the allowance is spent, so
+        // the mirror says so too. Without this the fiche would keep advertising a
+        // free sticker that answers 402 on every tap.
+        consumeRestyle();
       } else {
         track(events.restyleFailed, {
           source: 'onboarding',
@@ -453,7 +468,7 @@ export default function Onboarding() {
         captureError(caught, { stage: 'onboarding_restyle', code });
       }
 
-      say(STICKER_EXCUSE[code] ?? STICKER_EXCUSE.network);
+      setExcuse(STICKER_EXCUSE[code] ?? STICKER_EXCUSE.network);
     }
 
     setStep('done');
@@ -594,6 +609,20 @@ export default function Onboarding() {
             <CarSilhouette width={PAYOFF_SILHOUETTE} color={colors.silhouette} />
           </Animated.View>
         )}
+
+        {/* Why the card is showing a photograph rather than a sticker. Under the
+            card, because that is the thing it is about — and never a dead end:
+            every one of these lines points at the fiche, where the button is. */}
+        {excuse ? (
+          <Animated.View
+            entering={FadeInDown.delay(300).duration(motion.base)}
+            style={styles.excuse}
+          >
+            <Text variant="caption" tone="tertiary" center>
+              {excuse}
+            </Text>
+          </Animated.View>
+        ) : null}
 
         <Animated.View
           entering={FadeInDown.delay(360).duration(motion.base)}
@@ -1020,6 +1049,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: spacing.sm,
+  },
+  excuse: {
+    marginTop: spacing.lg,
+    maxWidth: 320,
   },
   payoffCopy: {
     marginTop: spacing.xl,
