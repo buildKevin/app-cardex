@@ -6,7 +6,7 @@ En installant et en utilisant CarDex, tu acceptes ce qui suit. Si tu n'es pas
 d'accord, n'utilise pas l'application.
 
 Éditeur : **Kevin Stacchetti**, développeur indépendant.
-Contact : **<EMAIL_DE_CONTACT>**
+Contact : **kevinstacchett@gmail.com**
 
 ---
 
@@ -109,4 +109,4 @@ conformité.
 ## 8. Droit applicable
 
 Droit français. En cas de litige, une solution amiable est recherchée par écrit avant
-toute action, à l'adresse **<EMAIL_DE_CONTACT>**.
+toute action, à l'adresse **kevinstacchett@gmail.com**.

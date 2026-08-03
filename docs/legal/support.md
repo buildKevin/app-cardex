@@ -1,7 +1,7 @@
 # Support — CarDex
 
 Une question, un bug, une voiture mal identifiée ? Écris à
-**<EMAIL_DE_CONTACT>**. Réponse sous 48 h en général.
+**kevinstacchett@gmail.com**. Réponse sous 48 h en général.
 
 Pour qu'on puisse t'aider vite, indique ton modèle d'iPhone, la version d'iOS, et la
 version de CarDex (Profil → tout en bas).

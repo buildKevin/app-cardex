@@ -7,7 +7,7 @@ l'application l'identifie et l'ajoute à ton garage. Cette page décrit exacteme
 quelles données cela implique, où elles vont, et ce que tu peux exiger.
 
 Éditeur : **Kevin Stacchetti**, développeur indépendant.
-Contact : **<EMAIL_DE_CONTACT>**
+Contact : **kevinstacchett@gmail.com**
 
 ---
 
@@ -107,7 +107,7 @@ compte. C'est une suppression réelle et immédiate — compte, garage, photos. 
 irréversible et nous ne conservons pas de copie.
 
 Le RGPD te donne par ailleurs un droit d'accès, de rectification, d'effacement,
-de limitation, d'opposition et de portabilité. Écris à **<EMAIL_DE_CONTACT>** et nous
+de limitation, d'opposition et de portabilité. Écris à **kevinstacchett@gmail.com** et nous
 répondons sous 30 jours. Tu peux également saisir la CNIL (`cnil.fr`).
 
 ## Mineurs

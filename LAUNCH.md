@@ -82,8 +82,12 @@ pourquoi de chaque ligne.
 
 **Deux décisions et une vérification à l'œil**
 
-- [ ] **A17.** Les 22 logos constructeurs — voir § 1.1. À trancher avant la review
-      publique, pas avant TestFlight interne.
+- [x] **A17.** ✅ **Décision : on garde les 22 logos pour la v1.** Le repli
+      monogramme reste prêt — `<BrandLogo>` le fait déjà pour Mercedes-Benz, Alfa
+      Romeo et Land Rover — et se déclenche en vidant `BRAND_LOGO_PATHS`, soit un
+      commit. Le raisonnement : se tromper est réversible par une mise à jour,
+      retirer préventivement est un coût certain payé au lancement. Corollaire
+      non négociable : **aucun nom de marque dans les mots-clés App Store**.
 - [ ] **A18.** Anonymous sign-in sur le projet hébergé — voir § 1.2.
 - [x] **A19.** ✅ `icon.png` et `splash-icon.png` identiques : voulu, même marque
       au lancement. L'avertissement de `verify:release` est donc attendu.
@@ -91,7 +95,8 @@ pourquoi de chaque ligne.
 ### B — Moi, dès que tu me donnes les valeurs
 
 - [x] **B1.** ✅ Clé `appl_…` câblée dans `eas.json` profil `production`
-- [ ] **B2.** Substituer l'adresse de A10 dans `docs/legal/`
+- [x] **B2.** ✅ `kevinstacchett@gmail.com` substituée dans `docs/legal/`
+      (5 occurrences) — la source du repo et les pages Notion concordent
 - [x] **B3.** ✅ La feature restyle est commitée (`7e87144`), l'arbre est propre
 - [ ] **B4.** `npm run verify:release`, puis build local et upload TestFlight
 
