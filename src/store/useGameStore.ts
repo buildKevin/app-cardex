@@ -29,7 +29,8 @@ interface Profile {
   /** Local file uri of the picked avatar, null for the initials fallback. */
   avatarUri: string | null;
   /** How the account was created, shown in the profile. */
-  provider: 'apple' | 'google' | 'local' | null;
+  /** `anonymous` is a real Supabase user; `local` exists only on the device. */
+  provider: 'apple' | 'google' | 'local' | 'anonymous' | null;
 }
 
 interface GameState {

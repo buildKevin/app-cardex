@@ -19,13 +19,13 @@ import { Text } from '../src/components/Text';
 import { captureError, events, identify, track } from '../src/services/analytics';
 import {
   SignInCancelled,
+  continueWithoutAccount,
   isAppleSignInAvailable,
   signIn,
   signInWithApple,
   type Account,
   type Provider,
 } from '../src/services/auth';
-import { createId } from '../src/lib/id';
 import { restoreGarage } from '../src/services/restoreGarage';
 import { useGameStore } from '../src/store/useGameStore';
 import { colors, gutter, motion, radii, spacing } from '../src/theme';
@@ -110,7 +110,9 @@ export default function Onboarding() {
     track(events.onboardingCompleted, {
       provider: account.provider,
       // The whole point of the skip button: how many players refuse an account.
-      skipped_account: account.provider === 'local',
+      // Both values mean "skipped" — `anonymous` on a configured project,
+      // `local` only when there is none, or when anonymous sign-ins are off.
+      skipped_account: account.provider === 'local' || account.provider === 'anonymous',
     });
 
     // Not awaited: a returning player should reach the app immediately, and the
@@ -147,12 +149,14 @@ export default function Onboarding() {
   };
 
   /**
-   * The whole game works on-device, so requiring an account would fall foul of
-   * App Store Review Guideline 5.1.1(i). Skipping creates a local-only account
-   * that can be upgraded later from the profile.
+   * Skipping has to stay possible — requiring an account would fall foul of
+   * Guideline 5.1.1(i) — but it cannot mean "no server account". Identification
+   * is a server call that answers 401 without a user token, so the previous
+   * local-only id left the skip button leading to an app whose main action
+   * failed. `continueWithoutAccount` creates an anonymous Supabase user
+   * instead; see the note on it for why that is the only shape that works.
    */
-  const onSkip = () =>
-    run('skip', async () => ({ id: createId(), email: null, provider: 'local' }));
+  const onSkip = () => run('skip', continueWithoutAccount);
 
   return (
     <View style={styles.root}>

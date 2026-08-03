@@ -84,7 +84,13 @@ export async function signInWithApple(): Promise<Account> {
 export interface Account {
   id: string;
   email: string | null;
-  provider: Provider | 'local';
+  /**
+   * `anonymous` and `local` are not the same thing, and the difference decides
+   * whether the player can scan at all. `anonymous` is a real Supabase user, so
+   * it has a JWT and a `public.users` row; `local` is an id that exists only on
+   * the device, which is all we can offer when there is no project configured.
+   */
+  provider: Provider | 'local' | 'anonymous';
   /** Apple hands over the real name once, on first authorisation only. */
   suggestedName?: string;
 }
@@ -95,10 +101,40 @@ export interface Account {
  * real `public.users` row), which is what the server-side scan counter needs —
  * unlike the purely local account used when there is no Supabase at all.
  */
-async function signInAnonymously(provider: Provider): Promise<Account> {
+async function signInAnonymously(provider: Account['provider']): Promise<Account> {
   const { data, error } = await supabase!.auth.signInAnonymously();
   if (error || !data.user) throw new Error(error?.message ?? 'Connexion anonyme impossible');
   return { id: data.user.id, email: null, provider };
+}
+
+/**
+ * "Continue without an account".
+ *
+ * It has to create a real anonymous Supabase user, not just a device-local id,
+ * because identification is a server call: `identify-car` resolves its caller
+ * with `auth.getUser()` and answers 401 to anything that is not a user token.
+ * A local-only account therefore cannot scan — the app's whole point fails on
+ * the first tap, which is both a dead end for the player and a rejection for a
+ * reviewer who takes the skip button at its word.
+ *
+ * The anonymous user is also what gives `begin_scan()` a row to count against,
+ * so the half of the free-scan limit that a client cannot bypass keeps working
+ * for players who never sign in.
+ *
+ * Degrades to a local id in two cases, rather than blocking the button: no
+ * Supabase project at all (the empty-`.env` property), and anonymous sign-ins
+ * disabled on the project. In the second case scanning will still fail, but it
+ * fails at the scan with its own message instead of trapping the player in
+ * onboarding.
+ */
+export async function continueWithoutAccount(): Promise<Account> {
+  if (!supabase) return { id: createId(), email: null, provider: 'local' };
+
+  try {
+    return await signInAnonymously('anonymous');
+  } catch {
+    return { id: createId(), email: null, provider: 'local' };
+  }
 }
 
 /**
@@ -163,6 +199,8 @@ export async function getAccount(): Promise<Account | null> {
   return {
     id: data.user.id,
     email: data.user.email ?? null,
-    provider: (data.user.app_metadata?.provider as Provider) ?? 'local',
+    // Supabase reports `anonymous` here for a user created by
+    // `signInAnonymously`, which is exactly the value the union now carries.
+    provider: (data.user.app_metadata?.provider as Account['provider']) ?? 'local',
   };
 }
