@@ -75,9 +75,14 @@ pourquoi de chaque ligne.
       la page de la version 1.0, pas là — tout est rédigé dans
       `docs/app-store-listing.md`, écran 3.
 - [x] **A14.** ✅ Classification d'âge : questionnaire 7 étapes rempli, 4+.
-- [ ] **A15.** **App Privacy** : photos/caméra (fonctionnalité, non liée à
-      l'identité), identifiants si PostHog est actif. **Ne pas** déclarer de suivi
-      publicitaire, il n'y en a pas.
+- [x] **A15.** ✅ **App Privacy publiée**, 7 types déclarés — e-mail, photos,
+      autre contenu (le pseudo), ID utilisateur, historique d'achats, interaction
+      produit, données de pannes. Tous liés à l'identité, **aucun** utilisé pour
+      le suivi. Ni localisation, ni donnée publicitaire, ni IDFA. La photo de
+      profil est volontairement absente : elle ne quitte jamais l'appareil, donc
+      ce n'est pas une collecte. Les *données de performance* le sont aussi —
+      PostHog capture des exceptions, pas des temps de chargement.
+      L'URL de la politique est sur cette page, pas sur *Informations sur l'app*.
 - [ ] **A16.** Note pour la review — **rédigée dans `docs/app-store-listing.md`**.
       Elle contient le point qui compte : le scan est **caméra uniquement**, donc
       sans instruction explicite un testeur en bureau ne peut pas essayer la
