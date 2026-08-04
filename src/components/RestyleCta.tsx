@@ -26,7 +26,14 @@ interface RestyleCtaProps {
 }
 
 /**
- * The entry point to sticker generation, shared by the reveal and the fiche.
+ * The upgrade: « Embellir », shared by the reveal and the fiche.
+ *
+ * The card it sits under is already a sticker — every car is cut out on the
+ * device the moment it is scanned — so this no longer sells the *existence* of a
+ * sticker. It sells a better one: drawn rather than cut out, and Pro-only. That
+ * is the whole reason the free allowance went to zero. What the player is being
+ * asked to buy is a visible difference on a car they already like, instead of
+ * access to a feature they would have to take on trust.
  *
  * Deliberately not a `<Button>`. It sits next to real buttons on both screens,
  * and a fourth grey rectangle in a stack of grey rectangles is invisible — this
@@ -51,12 +58,12 @@ export function RestyleCta({ entry, accent = colors.accent, source }: RestyleCta
   // meaningless without a photograph to work from.
   if (!restyleAvailable || !entry.photoUri) return null;
 
+  // `styledPhotoUri`, deliberately — never `displayPhoto`. Every car has a
+  // die-cut now, so a check on "does this entry have a sticker" would answer yes
+  // everywhere and this button would offer « Refaire » on a redraw that has never
+  // been made. What it asks is narrower: has the *paid* one been drawn yet.
   const styled = Boolean(entry.styledPhotoUri);
-  const hint = isPro
-    ? 'Une trentaine de secondes'
-    : left > 0
-      ? 'Ton sticker offert · une trentaine de secondes'
-      : 'Avec CarDex Pro';
+  const hint = isPro ? 'Une trentaine de secondes' : 'Avec CarDex Pro';
 
   return (
     <Pressable
@@ -65,6 +72,7 @@ export function RestyleCta({ entry, accent = colors.accent, source }: RestyleCta
         track(events.restyleCtaTapped, {
           source,
           rarity: entry.rarity,
+          method: 'redraw',
           // A second rendering on the same car is a different intent from a first
           // one — and for a free player it is the tap that hits the paywall.
           already_styled: Boolean(entry.styledPhotoUri),
@@ -93,9 +101,7 @@ export function RestyleCta({ entry, accent = colors.accent, source }: RestyleCta
         </View>
 
         <View style={styles.copy}>
-          <Text variant="bodyMedium">
-            {styled ? 'Refaire le sticker' : 'Transformer en sticker'}
-          </Text>
+          <Text variant="bodyMedium">{styled ? 'Refaire le sticker' : 'Embellir ce sticker'}</Text>
           <Text variant="caption" tone="tertiary" numberOfLines={1}>
             {hint}
           </Text>

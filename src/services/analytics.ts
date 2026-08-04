@@ -164,9 +164,15 @@ export const events = {
   scanBlockedByLimit: 'scan_blocked_by_limit',
   scanRetried: 'scan_retried',
 
-  // Sticker generation. Kept under the `restyle_` prefix: renaming a live event
-  // splits every existing funnel in two, and the feature is the same spend and
-  // the same paywall trigger it always was.
+  // The paid sticker — the AI redraw. Kept under the `restyle_` prefix: renaming
+  // a live event splits every existing funnel in two, and it is the same spend
+  // against the same paywall it always was.
+  //
+  // The free die-cut deliberately fires *none* of these. It happens by itself at
+  // the end of every scan, so counting it here would multiply `restyle_started`
+  // by the scan volume and drive the conversion rate of the paid funnel to
+  // nothing. `method` marks the redraw explicitly all the same, so a second
+  // method can never merge into this one silently.
   restyleCtaTapped: 'restyle_cta_tapped',
   restyleStarted: 'restyle_started',
   restyleSucceeded: 'restyle_succeeded',
@@ -208,6 +214,14 @@ export const events = {
   // Health — never fired on a happy path
   syncFailed: 'sync_failed',
   photoFailed: 'photo_failed',
+  /**
+   * A car that kept its raw photograph because the die-cut could not be made.
+   *
+   * Failure only, on purpose: a success per scan would be one event per scan for
+   * a 200 ms local operation, and the question we actually have is "how many
+   * garages still look like the old app?".
+   */
+  diecutFailed: 'diecut_failed',
 } as const;
 
 export type EventName = (typeof events)[keyof typeof events];

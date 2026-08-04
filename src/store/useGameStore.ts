@@ -14,11 +14,17 @@ export const FREE_SCAN_LIMIT = 10;
 export const SHOWCASE_SIZE = 3;
 
 /**
- * Photo restyles offered before the paywall. One, for the lifetime of the
- * account — not one a month: the whole point is that the second click is the
- * one that sells Pro.
+ * AI redraws offered before the paywall. None: « Embellir » is a Pro feature.
+ *
+ * It used to be one for the lifetime of the account, because a paywall on a
+ * feature nobody had seen sells nothing. The on-device die-cut is that
+ * demonstration now — free, unlimited, on every car — so what the paywall asks
+ * for is an upgrade to a sticker the player can already see, rather than access
+ * to a feature they have to take on trust.
+ *
+ * Mirrors `begin_restyle()`, which owns the truth and refuses at zero.
  */
-export const FREE_RESTYLE_LIMIT = 1;
+export const FREE_RESTYLE_LIMIT = 0;
 /** Pro's monthly allowance. Mirrors `begin_restyle()`, which owns the truth. */
 export const PRO_RESTYLE_LIMIT = 30;
 
@@ -65,6 +71,12 @@ interface GameState {
   addScan: (result: VisionResult, photoUri: string | null) => GarageEntry;
   /** Attaches the AI rendering to an entry, keeping the original photo. */
   setStyledPhoto: (entryId: string, uri: string, path: string | null) => void;
+  /**
+   * Attaches the on-device die-cut. No `path` argument, and that is the whole
+   * design: this sticker is never uploaded, because it is derived from a photo
+   * the bucket already holds and costs nothing to rebuild.
+   */
+  setDiecut: (entryId: string, uri: string) => void;
   toggleShowcase: (entryId: string) => void;
   removeEntry: (entryId: string) => void;
   /** Drops the session and returns to onboarding, keeping the local garage. */
@@ -157,6 +169,13 @@ export const useGameStore = create<GameState>()(
         set((state) => ({
           garage: state.garage.map((entry) =>
             entry.id === entryId ? { ...entry, styledPhotoUri: uri, styledPhotoPath: path } : entry,
+          ),
+        })),
+
+      setDiecut: (entryId, uri) =>
+        set((state) => ({
+          garage: state.garage.map((entry) =>
+            entry.id === entryId ? { ...entry, diecutUri: uri } : entry,
           ),
         })),
 

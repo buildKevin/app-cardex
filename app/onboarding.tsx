@@ -49,9 +49,9 @@ import {
   type Account,
   type Provider,
 } from '../src/services/auth';
-import { persistStyledPhoto, pickImage, preparePhoto } from '../src/services/photo';
+import { createDiecut } from '../src/services/diecut';
+import { pickImage, preparePhoto } from '../src/services/photo';
 import { restoreGarage } from '../src/services/restoreGarage';
-import { RestyleError, restyleAvailable, restylePhoto } from '../src/services/restyle';
 import { pushEntry } from '../src/services/sync';
 import { useGameStore, useGarageEntry } from '../src/store/useGameStore';
 import { colors, fonts, gutter, motion, radii, shadow, spacing, type, withAlpha } from '../src/theme';
@@ -139,16 +139,18 @@ const RETURNING = [
 ];
 
 /** Why a generation did not happen, in the app's own voice. Never a dead end. */
+/**
+ * Why the card is showing a photograph rather than a sticker.
+ *
+ * One line now instead of five. The sticker is cut out on the device, so none of
+ * the old excuses can happen any more — there is no allowance to have spent, no
+ * upload to have failed, no key to be missing, and no model to have given up.
+ * What is left is the only failure the die-cut has: nothing in the frame it could
+ * take to be a car.
+ */
 const STICKER_EXCUSE: Record<string, string> = {
-  limit: 'Ton sticker offert est déjà passé — mais ta voiture, elle, est bien dans ton garage.',
-  not_synced:
-    'Je n’ai pas réussi à mettre ta photo à l’abri. Ta voiture est dans ton garage, le sticker t’attend sur sa fiche.',
-  network:
-    'Réseau coupé au mauvais moment. Ta voiture est dans ton garage, tu pourras retenter le sticker depuis sa fiche.',
-  failed:
-    'Mon crayon a dérapé sur ce coup-là. Ta voiture est dans ton garage — retente le sticker depuis sa fiche, ça ne t’a rien coûté.',
-  unconfigured:
-    'Les stickers ne sont pas dispos sur cette version. Ta voiture est dans ton garage.',
+  no_subject:
+    'Je n’ai pas réussi à détacher ta voiture du fond — trop de monde autour, sans doute. Ta photo fait l’affaire, et ta voiture est bien dans ton garage.',
 };
 
 /**
@@ -274,9 +276,7 @@ export default function Onboarding() {
   const setUsername = useGameStore((state) => state.setUsername);
   const addScan = useGameStore((state) => state.addScan);
   const markSynced = useGameStore((state) => state.markSynced);
-  const setStyledPhoto = useGameStore((state) => state.setStyledPhoto);
-  const consumeRestyle = useGameStore((state) => state.consumeRestyle);
-  const isPro = useGameStore((state) => state.isPro);
+  const setDiecut = useGameStore((state) => state.setDiecut);
 
   useEffect(() => {
     track(events.onboardingStarted);
@@ -425,7 +425,7 @@ export default function Onboarding() {
       setPhotoUri(photo.uri);
       reply(undefined, photo.uri);
       say(
-        'Voilà donc la bête. Je te la transforme en sticker, *cadeau de bienvenue*.',
+        'Voilà donc la bête. Je te la *découpe en sticker*, ça prend une seconde.',
         ACCOUNT_GATE,
       );
       advance('auth');
@@ -437,12 +437,23 @@ export default function Onboarding() {
     }
   };
 
-  // ── Account, then the sticker ──────────────────────────────────────────────
+  // ── The sticker, then the account ──────────────────────────────────────────
 
   /**
-   * Everything that happens once there is an account: the card, the push, the
-   * sticker. Sequential on purpose — each step needs what the one before it
-   * produced, and the player is watching a single line of progress.
+   * Everything that happens once there is an account: the card, the sticker, the
+   * push, the restore. Sequential on purpose — each step needs what the one
+   * before it produced, and the player is watching a single line of progress.
+   *
+   * The order used to be the other way round, because the sticker was an image
+   * model behind an authenticated edge function and needed the pushed row before
+   * it could run. It is cut out on the device now, so it comes first: it is the
+   * one step that cannot fail for a network reason, and it is the payoff.
+   *
+   * That reordering also cost the restore its cover. `restoreGarage` used to be
+   * fired without being awaited and ride along inside the thirty seconds the
+   * image model took; with those seconds gone there is nothing left to hide it
+   * behind, so it is awaited outright below — on every path, not just the one
+   * without a card.
    */
   const build = async (account: Account) => {
     setStep('working');
@@ -460,114 +471,52 @@ export default function Onboarding() {
         )
       : null;
 
-    if (created) {
+    if (created && photoUri) {
       setEntryId(created.id);
-      say('C’est parti. Laisse-moi *une trentaine de secondes*.');
+
+      // Not narrated, because there is nothing to narrate: by the time a line
+      // like « laisse-moi une trentaine de secondes » had been read, the sticker
+      // would already be sitting behind it.
+      const diecut = await createDiecut(photoUri);
+      if (diecut) setDiecut(created.id, diecut);
+      else setExcuse(STICKER_EXCUSE.no_subject);
     }
 
-    // A local account has no server to push to, and so no sticker either. The
-    // app has to run with an empty `.env`, so this is a supported ending.
+    // A local account has no server to push to. It *does* get its sticker now —
+    // the die-cut never needed one — which is the first time this ending has
+    // handed the player a card that looks like everybody else's.
     if (account.provider === 'local') {
       setStep('done');
       return;
     }
 
-    let remoteId: string | null = null;
     if (created) {
       try {
         breadcrumb('onboarding: pushing the first entry');
         const pushed = await pushEntry(account.id, created);
-        if (pushed) {
-          markSynced(created.id, pushed.remoteId, pushed.photoPath);
-          remoteId = pushed.remoteId;
-        } else {
-          track(events.syncFailed, { stage: 'push_entry', source: 'onboarding' });
-        }
+        if (pushed) markSynced(created.id, pushed.remoteId, pushed.photoPath);
+        else track(events.syncFailed, { stage: 'push_entry', source: 'onboarding' });
       } catch (error) {
         captureError(error, { stage: 'onboarding_push' });
       }
     }
 
-    // Started only now: `restoreGarage` pushes everything unsynced, so kicking it
-    // off before `markSynced` would race our own insert and hand a returning
-    // player two copies of the car they just declared.
-    const restore = restoreGarage(account.id)
-      .then((result) => {
-        track(events.garageRestored, result);
-        return result;
-      })
-      .catch((error) => {
-        captureError(error, { stage: 'restore_garage' });
-        return null;
-      });
-
-    // With no card to draw there is nothing else coming, and the payoff is about
-    // to tell the player their garage is back — so this is the one path that
-    // waits for it. Behind a card, the sticker call is the wait and the restore
-    // rides along inside it.
-    if (!created) {
-      const result = await restore;
-      setRestored(result?.pulled ?? 0);
-      setStep('done');
-      return;
-    }
-
-    // The allowance is deliberately *not* pre-checked here. `begin_restyle()`
-    // owns it and refuses before the image call, so asking costs a round trip and
-    // never a generation — whereas `restylesLeft` is a per-device mirror that
-    // knows nothing about the account that signed in three lines ago. It is the
-    // wrong authority at exactly the moment the account is new.
-    if (!restyleAvailable || !remoteId) {
-      setExcuse(restyleAvailable ? STICKER_EXCUSE.not_synced : STICKER_EXCUSE.unconfigured);
-      setStep('done');
-      return;
-    }
-
-    const startedAt = Date.now();
-    track(events.restyleStarted, {
-      source: 'onboarding',
-      is_pro: isPro,
-      already_styled: false,
-      rarity: created.rarity,
-    });
-
+    // Awaited, and started only now: `restoreGarage` pushes everything unsynced,
+    // so kicking it off before `markSynced` would race our own insert and hand a
+    // returning player two copies of the car they just declared.
+    //
+    // The `await` is what changed. It used to be fired and left running on the
+    // card path, because the payoff was thirty seconds away and the restore
+    // finished inside them; now the payoff is two hundred milliseconds away, and
+    // a screen that announced « ton garage est revenu » while the fetch was still
+    // in flight would be counting cars it did not have yet.
     try {
-      breadcrumb('onboarding: calling the image model');
-      const result = await restylePhoto(remoteId);
-      // The signed URL expires tomorrow, and this picture is now the card's face.
-      const uri = await persistStyledPhoto(result.uri, result.path);
-
-      setStyledPhoto(created.id, uri, result.path);
-      consumeRestyle();
-      track(events.restyleSucceeded, {
-        source: 'onboarding',
-        make: created.make,
-        model: created.model,
-        rarity: created.rarity,
-        is_pro: isPro,
-        duration_ms: Date.now() - startedAt,
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    } catch (caught) {
-      const code = caught instanceof RestyleError ? caught.code : 'network';
-
-      if (code === 'limit') {
-        track(events.restyleBlockedByLimit, { source: 'onboarding' });
-        // The server is the authority and it just said the allowance is spent, so
-        // the mirror says so too. Without this the fiche would keep advertising a
-        // free sticker that answers 402 on every tap.
-        consumeRestyle();
-      } else {
-        track(events.restyleFailed, {
-          source: 'onboarding',
-          code,
-          is_pro: isPro,
-          duration_ms: Date.now() - startedAt,
-        });
-        captureError(caught, { stage: 'onboarding_restyle', code });
-      }
-
-      setExcuse(STICKER_EXCUSE[code] ?? STICKER_EXCUSE.network);
+      breadcrumb('onboarding: restoring the garage');
+      const result = await restoreGarage(account.id);
+      track(events.garageRestored, result);
+      setRestored(result?.pulled ?? 0);
+    } catch (error) {
+      captureError(error, { stage: 'restore_garage' });
     }
 
     setStep('done');
@@ -822,7 +771,7 @@ export default function Onboarding() {
         ))}
 
         {step === 'working' ? (
-          <Working label={returning ? 'Je récupère ton garage…' : 'Je dessine ta voiture…'} />
+          <Working label={returning ? 'Je récupère ton garage…' : 'Je découpe ta voiture…'} />
         ) : null}
       </ScrollView>
 

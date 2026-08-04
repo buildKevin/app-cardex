@@ -28,6 +28,7 @@ import {
   syncPlayerContext,
   track,
 } from '../src/services/analytics';
+import { createDiecut, diecutAvailable } from '../src/services/diecut';
 import {
   configurePurchases,
   getCustomerInfo,
@@ -123,6 +124,7 @@ export default function RootLayout() {
           <PostHogSurveyProvider client={posthog}>
             <PostHogErrorBoundary fallback={Crashed}>
               <Telemetry />
+              <Diecuts />
               <Stack
                 screenOptions={{
                   headerShown: false,
@@ -207,6 +209,59 @@ function Telemetry() {
     knownPro.current = isPro;
     track(events.proStatusChanged, { is_pro: isPro });
   }, [isPro]);
+
+  return null;
+}
+
+/**
+ * The die-cut backfill: every car holding a photograph and no sticker gets one.
+ *
+ * There is no dedicated migration and there is not meant to be one. A scan cuts
+ * its own car out, and this is the same call for everything that arrived any
+ * other way — a garage from before the feature existed, and the rows a sign-in
+ * merges back after a reinstall, which come down from the bucket with no die-cut
+ * because a die-cut is never stored.
+ *
+ * Its own component for the same reason as `<Telemetry>`: it subscribes to the
+ * garage, and living in `RootLayout` would re-render the navigator on every scan.
+ */
+function Diecuts() {
+  const hydrated = useGameStore((state) => state.hydrated);
+  const garage = useGameStore((state) => state.garage);
+  const setDiecut = useGameStore((state) => state.setDiecut);
+
+  /** Tried this launch, so an unliftable photo is attempted once and not looped on. */
+  const attempted = useRef(new Set<string>());
+  const pumping = useRef(false);
+
+  useEffect(() => {
+    if (!hydrated || pumping.current || !diecutAvailable()) return;
+    pumping.current = true;
+
+    (async () => {
+      // One at a time, and re-read from the store each round rather than closing
+      // over `garage`: forty cars cut out at once would spike memory on the very
+      // devices this is meant to feel instant on, and a snapshot would miss the
+      // rows a sign-in merges in while the pump is still working.
+      for (;;) {
+        const next = useGameStore
+          .getState()
+          .garage.find(
+            (entry) => entry.photoUri && !entry.diecutUri && !attempted.current.has(entry.id),
+          );
+        if (!next?.photoUri) break;
+
+        attempted.current.add(next.id);
+        // Silent: this retries every unliftable photo on every cold start, so
+        // measuring here would file one failure per launch per car forever. The
+        // scan is where a die-cut is counted, once, on the car it belongs to.
+        const uri = await createDiecut(next.photoUri, { measure: false });
+        if (uri) setDiecut(next.id, uri);
+      }
+
+      pumping.current = false;
+    })();
+  }, [hydrated, garage, setDiecut]);
 
   return null;
 }

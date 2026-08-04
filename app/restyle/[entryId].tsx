@@ -54,7 +54,7 @@ const WORKING_STEPS = [
 const STEP_MS = 4000;
 
 const ERROR_COPY: Record<RestyleErrorCode, string> = {
-  limit: 'Tu as utilisé ton sticker gratuit.',
+  limit: 'Embellir un sticker est réservé à CarDex Pro.',
   not_synced: "Cette photo n'est pas encore sauvegardée. Réessaie dans un instant.",
   network: 'Connexion impossible. Vérifie ton réseau.',
   failed: "L'IA n'a pas réussi ce sticker. Réessaie, ça ne t'a rien coûté.",
@@ -121,7 +121,11 @@ export default function Restyle() {
     setError(null);
     track(events.restyleStarted, {
       is_pro: isPro,
-      // A re-roll on a car that already has a sticker is the case that burns the
+      // Always `redraw` here: the free die-cut never comes through this screen and
+      // never fires these events. Sent all the same, so a second method can never
+      // merge into this funnel without the name changing.
+      method: 'redraw',
+      // A re-roll on a car that already has a redraw is the case that burns the
       // allowance fastest, and the one most likely to hit the ceiling.
       already_styled: Boolean(entry.styledPhotoUri),
       rarity: entry.rarity,
@@ -163,6 +167,7 @@ export default function Restyle() {
         model: entry.model,
         rarity: entry.rarity,
         is_pro: isPro,
+        method: 'redraw',
         duration_ms: Date.now() - startedAt,
       });
 
@@ -182,6 +187,7 @@ export default function Restyle() {
       track(events.restyleFailed, {
         code,
         is_pro: isPro,
+        method: 'redraw',
         duration_ms: Date.now() - startedAt,
       });
       // Every one of these is ours: `not_synced` is a sync bug, `failed` is a
@@ -236,26 +242,27 @@ export default function Restyle() {
             style={styles.block}
           >
             <Text variant="overline" tone="tertiary" uppercase>
-              Sticker créé
+              Sticker embelli
             </Text>
             <Text variant="title">
               {entry.make} {entry.model}
             </Text>
             <Text variant="body" tone="secondary">
-              Il prend la place de la photo dans ton garage, ta vitrine et tes collections. Ta photo
-              d'origine reste celle de la fiche et de l'accueil.
+              Il remplace ton sticker découpé dans le garage, la vitrine et les collections. Ta
+              photo d'origine, elle, ne bouge pas : elle reste sur la fiche.
             </Text>
             <Button label="Voir dans mon garage" onPress={() => router.back()} style={styles.cta} />
           </Animated.View>
         ) : (
           <View style={styles.block}>
             <Text variant="overline" tone="tertiary" uppercase>
-              Transformer en sticker
+              Embellir ce sticker
             </Text>
             <Text variant="title">Ta voiture, en collector</Text>
             <Text variant="body" tone="secondary">
-              L'IA redessine ta voiture en sticker découpé, sans rien changer au modèle, à sa
-              couleur ni à son angle. Ta photo est conservée.
+              Ton sticker est découpé dans ta photo. Là, l'IA la redessine entièrement — lumière,
+              vernis, carrosserie — sans rien changer au modèle, à sa couleur ni à son angle. Ta
+              photo est conservée.
             </Text>
 
             {error ? (
@@ -265,15 +272,13 @@ export default function Restyle() {
             ) : null}
 
             <Button
-              label={phase === 'working' ? 'Création…' : 'Créer le sticker'}
+              label={phase === 'working' ? 'Création…' : 'Embellir'}
               caption={
                 phase === 'working'
                   ? 'Une trentaine de secondes'
                   : isPro
                     ? undefined
-                    : left > 0
-                      ? 'Ton sticker offert'
-                      : 'Réservé à CarDex Pro'
+                    : 'Réservé à CarDex Pro'
               }
               onPress={generate}
               loading={phase === 'working'}

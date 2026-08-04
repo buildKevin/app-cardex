@@ -163,6 +163,7 @@ export default function Profile() {
     garage.forEach((entry) => {
       deletePhoto(entry.photoUri);
       deletePhoto(entry.styledPhotoUri ?? null);
+      deletePhoto(entry.diecutUri ?? null);
     });
 
   /**

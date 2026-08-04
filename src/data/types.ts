@@ -74,11 +74,25 @@ export interface GarageEntry {
   /** Local uri of the photo the user took. */
   photoUri: string | null;
   /**
-   * The AI rendering, when the player asked for one. Never replaces `photoUri`:
+   * The AI rendering, when the player paid for one. Never replaces `photoUri`:
    * the original stays so the fiche can toggle back to it, and so a re-render
    * always starts from the photograph rather than from a previous rendering.
    */
   styledPhotoUri?: string | null;
+  /**
+   * The free die-cut, cut out of `photoUri` on the device.
+   *
+   * A field of its own rather than a second writer of `styledPhotoUri`, and the
+   * reason is the button: `RestyleCta` reads `styledPhotoUri` to decide whether
+   * it offers « Embellir » or « Refaire », so a die-cut landing in that slot
+   * would flip every card in the app to « Refaire » the moment it was scanned,
+   * and pin `already_styled` to true on every event.
+   *
+   * Local only. It is never uploaded, never a column, and never merged from a
+   * remote row: it is *derived* from a photo that is already in the bucket, so
+   * it is rebuilt on demand for nothing instead of being archived.
+   */
+  diecutUri?: string | null;
   discoveredAt: string;
   xp: number;
   confidence: number;

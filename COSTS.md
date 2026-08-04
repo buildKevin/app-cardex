@@ -1,13 +1,45 @@
 # Coûts — ce qu'on paie, et les trois façons d'arrêter de le payer
 
-État au 03/08/2026. **Rien de ce document n'est commencé.** C'est un plan.
+Chiffré le 03/08/2026. **Tranché et implémenté le 04/08/2026** — voir la
+décision ci-dessous. Les sections 1 à 3 restent le relevé de ce qu'on payait ;
+elles n'ont pas été réécrites au passé, parce que les leviers 3.1 à 3.4 sont
+toujours à prendre et que les chiffres sont la seule raison de les prendre.
 
-Complément de [`STICKERS.md`](STICKERS.md), qui traite déjà *une* des trois voies
-possibles (les assets de catalogue) et laisse ouverte la question du coût réel.
+## La décision, et ce qui est construit
+
+Le détourage sur l'appareil n'est plus « la troisième voie » : **c'est le
+sticker par défaut de chaque voiture**, gratuit et illimité, et l'appel IA
+devient l'option payante derrière un bouton « Embellir » réservé à Pro.
+
+| | Gratuit | Payant |
+|---|---|---|
+| Quoi | die-cut détouré sur l'appareil | redessin IA complet |
+| Où | `modules/cardex-diecut` (Swift, Vision + Core Image) | `restyle-photo` (edge function, OpenAI) |
+| Quand | automatiquement, à la fin de chaque scan | sur demande, bouton « Embellir » |
+| Coût | 0 $, toujours | ~0,13 $ |
+| Latence | ~200 ms | ~30 s |
+| Stocké | jamais — dérivé de `photo_path` | `styled_photo_path` |
+| Champ | `diecutUri`, local uniquement | `styledPhotoUri` |
+
+Ce que ça change au-delà du coût :
+
+- **iOS uniquement.** Android n'est pas au programme, donc aucun repli à écrire.
+  Sous iOS 17, `isAvailable()` répond faux et la voiture garde sa photo — la
+  même dégradation que tout service absent dans cette app.
+- **`p_free_limit` passe de 1 à 0.** Le paywall ne vend plus l'existence d'un
+  sticker, il vend le meilleur des deux, sur une voiture que le joueur a déjà
+  sous les yeux. C'est une comparaison au lieu d'un compteur.
+- **Les 30 secondes disparaissent de l'onboarding**, qui ne fait plus aucun
+  appel image. Effet de bord à connaître : la restauration du garage se cachait
+  derrière cette attente, elle est maintenant attendue explicitement.
+- **Les 125 assets de catalogue de [`STICKERS.md`](STICKERS.md) sont
+  abandonnés.** Voir §6.
+
+Complément de [`STICKERS.md`](STICKERS.md), qui traitait *une* des trois voies
+possibles (les assets de catalogue) et laissait ouverte la question du coût réel.
 Ce document la ferme : les chiffres ci-dessous sont relevés sur les tarifs
 officiels OpenAI et les réglages effectivement déployés, pas estimés au doigt
-mouillé. Il ajoute aussi la voie que `STICKERS.md` n'envisage pas — le détourage
-sur l'appareil, sans aucun modèle.
+mouillé.
 
 ---
 
@@ -137,9 +169,10 @@ sur fond quelconque, ça casse.
 | Effort | fait | script + relecture des 125 | module natif Swift + build |
 | Marche pour une voiture hors catalogue | oui | non (il faut la générer) | **oui, sans rien générer** |
 
-Les deux dernières lignes sont celles qui décident, et elles ne pointent pas dans
-le même sens — ce qui suggère que ce n'est pas un choix unique. Voir la
-recommandation en section 6.
+Ce tableau a servi à trancher, mais la ligne qui a décidé n'y figure pas : **«
+c'est *ma* voiture » ne se compare pas à « uniformité de la grille » sur la même
+échelle.** La colonne de droite a gagné pour le gratuit et la colonne de gauche
+reste ce que Pro vend. La colonne du milieu est abandonnée — voir §6.
 
 ---
 
@@ -223,11 +256,16 @@ la feature n'existe pas dans Expo Go et que `AGENTS.md` demande un chargement
 paresseux pour tout module natif (`require()` dans un `try/catch`, comme
 `expo-image-picker` et les modules d'achat).
 
-**Option B — `react-native-subject-lift`** (0.2.0, mars 2026, VisionKit iOS +
-ML Kit Android). Une heure pour essayer, et ça donne Android en prime. Mais c'est
-une 0.2.0 d'un seul auteur pour porter une feature centrale, et le bord blanc
-resterait à dessiner de toute façon. Bon pour un prototype d'une soirée, pas pour
-la version qui part sur l'App Store.
+**Option B — `react-native-subject-lift` : cul-de-sac, et pas pour la raison
+qu'on croyait.** Ce document a d'abord écrit « VisionKit iOS + ML Kit Android,
+une heure pour essayer » et se trompait. La lib (0.2.0, mars 2026, un seul
+auteur) enveloppe `VisionKit.ImageAnalysisInteraction` — l'UI Live Text d'Apple,
+celle qui exige un **appui long de l'utilisateur** — et non
+`Vision.VNGenerateForegroundInstanceMaskRequest`. Ses propres types l'admettent :
+*« VisionKit does not guarantee the bitmap exists at `shouldBeginAt` »*. Il n'y a
+aucune API impérative, donc rien qui puisse tourner tout seul à la fin d'un scan.
+Les deux noms se ressemblent et désignent deux API différentes ; c'est le piège à
+retenir. Le module Swift n'était pas le plan B, c'était le seul plan.
 
 **Option C — `@shopify/react-native-skia`** pour le bord, si le masque vient
 d'ailleurs. Inutile si le module Swift compose déjà : autant ne pas ajouter une
@@ -262,51 +300,76 @@ C'est la bonne nouvelle : **presque rien à construire.**
 
 ### 5.5 Ce que le détourage ne saura jamais faire
 
-À lire avant de s'enthousiasmer, parce que c'est exactement l'argument de
-`STICKERS.md` :
+C'est exactement l'argument de `STICKERS.md`, et c'est ce qui reste à vendre :
 
 - **L'uniformité.** Un détourage **garde la photo** : ciel gris, reflets de
   trottoir mouillé dans la carrosserie, flou de bougé, et un bout de poubelle
   coupé au bord du masque. Vingt détourages côte à côte, ce sont vingt photos de
   téléphone avec un liseré blanc — pas une collection. Le redessin, lui, épingle
   la lumière, le vernis et la marge, et c'est *pour ça* que la grille se tient.
-  Regarder vingt vignettes du concurrent, pas une seule, avant de trancher.
+  **Cette objection avait tort sur un point, et c'est ce qui a débloqué la
+  décision :** elle comparait au mauvais terme. Une grille de free user,
+  aujourd'hui, ce n'est pas vingt redessins — c'est **un** sticker et dix-neuf
+  photos brutes dans des plaques grises. Vingt die-cuts sont strictement plus
+  homogènes que ça. Le détourage ne concurrence pas le redessin, il remplace le
+  snapshot ; et ce qui reste de l'objection est précisément l'argument de vente
+  d'« Embellir ». Deux choses la rendent moins forte qu'écrit ici : la géométrie
+  est identique sur toutes les vignettes (même canevas, même bord, même marge),
+  et elle est *exacte* alors que le prompt ne pouvait que la demander.
 - **Le bon sujet.** Un passant à côté de la voiture, un rétroviseur ou un aileron
-  rognés, un halo sur un fond chargé. Le modèle est plus indulgent.
-- **Android**, et **iOS 16 et en dessous**.
+  rognés, un halo sur un fond chargé. Le modèle est plus indulgent. En pratique
+  c'est la seule vraie erreur du détourage, elle est comptée dans
+  `diecut_failed` avec `reason: 'no_subject'`, et la voiture garde sa photo.
+- **Android**, et **iOS 16 et en dessous**. Sans objet ici : Android n'est pas au
+  programme, et iOS 16 dégrade en no-op.
 
 ---
 
-## 6. La recommandation
+## 6. La décision prise, et pourquoi le catalogue tombe
 
-`STICKERS.md` a raison sur le fond : **l'asset de catalogue reste le défaut.**
-C'est la seule voie qui donne une grille parfaitement homogène, un coût
-totalement plafonné, et l'instantané dès le premier affichage. Rien ici ne
-change ça.
+Ce document recommandait d'abord de garder l'asset de catalogue comme défaut et
+de réserver le détourage aux voitures hors catalogue — deux voies
+complémentaires. **Ce n'est pas ce qui a été retenu, et le raisonnement mérite
+d'être gardé** parce que l'argument qui l'a emporté n'était pas le coût.
 
-Mais le détourage résout précisément le point 4 de ce plan, qui est son maillon
-faible. Aujourd'hui une voiture hors catalogue impose au premier découvreur ~30 s
-d'attente et un appel d'image complet. Un détourage local lui donne son sticker
-en 200 ms, gratuitement, sans rien générer et sans rien stocker — et « c'est
-littéralement ta voiture, celle que personne n'avait encore trouvée » est un
-meilleur trophée qu'un rendu canonique. **Les deux voies sont
-complémentaires, pas concurrentes :** le catalogue pour les 125 voitures
-connues, le détourage pour tout le reste.
+Le détourage a été promu **défaut pour toutes les voitures**, et les 125 assets
+pré-générés sont abandonnés. Trois raisons :
 
-Ordre à suivre :
+1. **Le paywall change de nature.** L'ancien modèle donnait un sticker puis
+   opposait un compteur vide : « ton sticker offert est utilisé ». Le nouveau
+   donne un sticker à chaque voiture, pour toujours, et vend l'écart de qualité
+   sur une voiture que le joueur regarde déjà. Une comparaison convertit mieux
+   qu'une rareté, et surtout elle ne peut pas frustrer.
+2. **Un asset canonique n'est pas *ta* voiture.** C'est précisément ce que le
+   détourage fait mieux que les deux autres voies, et ce que la §4 mesurait sans
+   en tirer la conclusion. Un rendu canonique en couleur de catalogue est un
+   objet de catalogue ; un die-cut est la voiture photographiée dans la rue.
+3. **Les 30 secondes sortent du chemin critique de tout le monde**, pas
+   seulement du premier découvreur d'une voiture inconnue. C'était le vrai motif
+   depuis le début (§1), et le catalogue ne le réglait que pour 125 modèles.
+
+Ce que le catalogue aurait apporté et qu'on n'a pas : une grille parfaitement
+homogène. C'est le prix payé, il est assumé, et c'est exactement ce que Pro vend.
+
+Reste à faire :
 
 | # | Quoi | Effet | Effort |
 |---|---|---|---|
 | 0 | Logger `usage` sur `restyle_delivered` (§2) | mesure exacte | 1 h, sans build |
 | 1 | A/B `detail: 'low'` sur la vision (§3.1) | −90 % par scan | 1 ligne + un A/B |
-| 2 | Essayer `quality: 'medium'` (§3.3) | −75 % par sticker | 1 secret, réversible |
+| 2 | Essayer `quality: 'medium'` (§3.3) | −75 % par sticker embelli | 1 secret, réversible |
 | 3 | WebP + le bug d'extension (§3.4) | −70 % stockage/egress | 30 min |
-| 4 | Le script des 125 assets ([`STICKERS.md`](STICKERS.md) §1–3) | plafonne le coût, tue l'attente | script + une session de relecture |
-| 5 | Le module de détourage (§5) pour les voitures hors catalogue | tue la dernière attente et le dernier coût variable | une demi-journée + build natif |
+| ✅ | Le module de détourage (§5), par défaut sur toutes les voitures | tue l'attente et le coût variable du gratuit | fait le 04/08/2026 |
+| ❌ | Le script des 125 assets ([`STICKERS.md`](STICKERS.md) §1–3) | abandonné, voir ci-dessus | — |
 
-Les étapes 0 à 3 sont à faire quoi qu'il arrive : elles ne coûtent rien, ne
-changent pas le produit, et divisent la facture actuelle par ~4 avant même
-d'avoir touché à l'architecture.
+Les étapes 0 à 3 restent à faire quoi qu'il arrive : elles ne coûtent rien, ne
+changent pas le produit, et elles portent maintenant sur le seul poste qui
+grossit encore, c'est-à-dire ce que Pro consomme.
+
+Une chose n'a pas été tranchée et n'est pas construite : **la paire avant/après
+sur l'écran « Embellir »**, sur une voiture d'exemple. C'est ce qui remplace la
+démonstration que le sticker gratuit à vie faisait. Sans elle, le paywall promet
+un écart de qualité au lieu de le montrer.
 
 ---
 
@@ -314,10 +377,12 @@ d'avoir touché à l'architecture.
 
 | | Coût d'un free user à vie | Coût d'un sticker |
 |---|---|---|
-| Aujourd'hui | ~0,19 $ | 0,13 $ |
-| Après les étapes 0–3 | **~0,04 $** | 0,034 $ |
-| Après l'étape 4 (catalogue) | ~0,004 $ | **0 $** (amorti sur ~17 $ une fois) |
-| Après l'étape 5 (détourage) | **~0,004 $, et plus rien qui croisse** | **0 $** |
+| Avant le 04/08 | ~0,19 $ | 0,13 $ |
+| **Aujourd'hui** (détourage par défaut, `p_free_limit` = 0) | **~0,04 $** | **0 $** pour le gratuit, 0,13 $ pour un embelli Pro |
+| Après les étapes 0–3 | ~0,004 $ | 0,034 $ pour un embelli Pro |
+
+Le coût du gratuit ne croît plus du tout : plus d'appel image, plus de stockage,
+plus d'egress — le die-cut est dérivé de la photo et refabriqué à la demande.
 
 Ne restent alors que les scans, qui sont le seul poste qu'on veuille garder
 payant : c'est celui que Pro vend.

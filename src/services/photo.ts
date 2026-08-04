@@ -10,6 +10,11 @@ const QUALITY = 0.7;
 const DIR_NAME = 'photos';
 /** AI renderings, kept apart so a purge can tell them from the originals. */
 const STYLED_DIR_NAME = 'styled';
+/**
+ * On-device die-cuts, kept apart from both — they are *derived* from the photo,
+ * so unlike a rendering the whole folder can be dropped and rebuilt for free.
+ */
+const DIECUT_DIR_NAME = 'diecut';
 
 /** The avatar is never shown larger than 64pt, so this is generous already. */
 const AVATAR_WIDTH = 256;
@@ -155,6 +160,18 @@ export async function prepareAvatar(sourceUri: string): Promise<string | null> {
     captureError(error, { stage: 'persist_avatar' });
     return null;
   }
+}
+
+/**
+ * Where the native module should write the die-cut it is about to cut out.
+ *
+ * Here rather than in `diecut.ts` because every other picture in the app gets
+ * its folder and its filename from this module, and two places deciding where
+ * pictures live is how a purge ends up missing half of them. PNG is not a
+ * choice: the die-cut is transparent, and that is the whole point of a die-cut.
+ */
+export function newDiecutPath(): string {
+  return new File(documentDirectory(DIECUT_DIR_NAME), `${createId()}.png`).uri;
 }
 
 /**

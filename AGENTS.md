@@ -79,31 +79,77 @@ Things that already bit us on SDK 57 / RN 0.86:
   client pushes it first rather than failing. It used to drop the car into one of
   four scenes; the backdrop keys are gone, and with them the list that was
   mirrored by hand on the client and could drift from the server's.
-- **The sticker wins wherever it exists, and never destroys the photograph.**
-  `photo_path` and `styled_photo_path` both live on the row, and
-  `src/lib/photo.ts` is the single place that decides which one a screen shows —
-  eight screens render an entry's picture, and the first divergence would be a
-  showcase still showing the raw snapshot. `displayPhoto()` is that rule;
-  `originalPhoto()` exists for the only two screens that want the snapshot
-  specifically, the fiche's comparison toggle and the sticker screen showing what
-  is about to be redrawn. Splitting it by screen was tried and reverted: a garage
-  whose grid shows stickers under a hero showing a snapshot reads as two
-  half-finished apps. `isSticker()` decides `contentFit` — a die-cut sticker
-  cropped with `cover` loses the edge that makes it a sticker — and the same flag
-  drops the grey plate behind it, which would put the object back in the box the
-  die-cut took it out of. The rendering is also copied to disk
-  (`persistStyledPhoto`), because the signed URL expires in a day and that
-  picture is now the entry's face.
+- **There are two stickers, and only one of them costs anything.** The free one
+  is cut out **on the device**: `modules/cardex-diecut` lifts the car off its
+  background with Vision's `VNGenerateForegroundInstanceMaskRequest` (the *lift
+  subject* of the Photos app), then grows a white die-cut edge in Core Image.
+  ~200 ms, offline, no model call, nothing stored, on every car. The paid one is
+  the AI redraw behind « Embellir », and it is Pro-only. Three things about the
+  free one are load-bearing:
+  - **It is not the npm package.** `react-native-subject-lift` wraps VisionKit's
+    `ImageAnalysisInteraction`, which is the Live Text UI: it needs a long-press
+    from the user and its own types admit the bitmap may not exist even then. It
+    cannot run by itself at the end of a scan, which is the entire requirement.
+    The Vision framework request is the headless one; they are different APIs
+    with confusingly similar names.
+  - **The framing is arithmetic, not prose.** The prompt *asks* the image model
+    for "centred, filling most of the frame with a small even margin"; the Swift
+    computes it, so it is exact on every car. Same for the 3% edge, pinned in
+    canvas pixels rather than as a fraction of the source photo — otherwise two
+    cars shot at different distances come back with different edges. This is the
+    one place where removing the model buys quality instead of spending it.
+  - **It is derived, so it is never stored.** No column, no bucket object, never
+    in the sync payload. A reinstall pulls `photo_path` back down and the sticker
+    is rebuilt for free — which is why storage and egress do not grow with it.
+- **The best sticker wins wherever it exists, and neither destroys the
+  photograph.** `src/lib/photo.ts` is the single place that decides which of the
+  three pictures a screen shows — eight screens render an entry's picture, and the
+  first divergence would be a showcase still showing the raw snapshot.
+  `displayPhoto()` is that rule and its order is not negotiable: redraw →
+  die-cut → photograph, because a redraw the player spent Pro on must never lose
+  to a die-cut rebuilt behind it on the next launch. `originalPhoto()` exists for
+  the only two screens that want the snapshot specifically, the fiche's comparison
+  toggle and the sticker screen showing what is about to be redrawn. Splitting it
+  by screen was tried and reverted: a garage whose grid shows stickers under a
+  hero showing a snapshot reads as two half-finished apps. `isSticker()` decides
+  `contentFit` and answers true for **both** kinds — a die-cut cropped with
+  `cover` loses the edge that makes it a sticker — and the same flag drops the
+  grey plate behind it, which would put the object back in the box the die-cut
+  took it out of. The redraw is also copied to disk (`persistStyledPhoto`),
+  because the signed URL expires in a day and that picture is now the entry's
+  face.
+- **`diecutUri` is a field of its own, and merging it into `styledPhotoUri` is
+  the bug waiting to happen.** `RestyleCta` reads `styledPhotoUri` to decide
+  whether it offers « Embellir » or « Refaire », so a die-cut landing in that slot
+  would flip every card in the app to « Refaire » the moment it was scanned — an
+  upgrade button advertising a re-roll of something that was never drawn — and
+  pin `already_styled` to true on every event in the funnel. One picture is
+  displayed; two fields decide it.
 - **Sticker accounting mirrors `begin_scan`/`commit_scan`, and must.** An image
   call costs 10-40x a vision call — more now that it runs on OpenAI at
   `quality: high` — so: refuse before paying, charge only on a stored result, and
   keep `restyle_calls` as a ceiling so a failing generation cannot be retried
-  forever for free. Free gets **one for the lifetime of the account** —
-  `begin_restyle` deliberately rolls over only Pro's window, because a monthly
-  free sticker means no second click ever reaches the paywall. The `restyle_`
-  names stay on the RPCs, the column and the PostHog events: renaming a live
-  event splits every existing funnel in two, and it is the same spend against the
-  same paywall it always was.
+  forever for free. **Free gets none of it** (`p_free_limit` = 0): the paywall
+  used to give one away because a paywall on a feature nobody had seen sells
+  nothing, and the on-device die-cut is that demonstration now — free, unlimited,
+  on every car. What « Embellir » asks the player to buy is a visible improvement
+  to a sticker already in their hand, not access to a feature taken on trust.
+  `begin_restyle` still rolls over only Pro's window; the reason changed rather
+  than went away — free has no allowance left to roll, and the guard is what stops
+  `p_free_limit` from silently becoming twelve a year if it is ever raised again.
+  The `restyle_` names stay on the RPCs, the column and the PostHog events:
+  renaming a live event splits every existing funnel in two, and it is the same
+  spend against the same paywall it always was.
+- **The die-cut fires none of the `restyle_*` events, and must not.** It happens
+  by itself at the end of every scan, so counting it there would multiply
+  `restyle_started` by the scan volume and drive the paid funnel's conversion rate
+  to nothing. The scan event carries `has_diecut`, `diecut_failed` carries the
+  reason, and the `restyle_*` events carry `method: 'redraw'` so a second method
+  can never merge into that funnel silently. `diecut_failed` is fired at scan time
+  only: the backfill in `<Diecuts>` retries every unliftable photo on each cold
+  start, and reporting there would file one failure per launch per car for ever.
+  A photo with no subject is also **not** sent to `captureError` — same call as
+  `no_car`, that is the player framing badly.
 - **The prompt never names the car**, and that rule got *more* important, not
   less, when the feature became a sticker. Two mistakes shipped in the first
   version and both cost fidelity: `quality: low` strips exactly the details that
@@ -126,11 +172,14 @@ Things that already bit us on SDK 57 / RN 0.86:
   `IMAGE_PROVIDER` so the app still runs with only that key, but it cannot cut
   out — it is asked for a flat white background instead, which reads as die-cut
   on our white canvas and nowhere else.
-- **What makes a grid of stickers read as a collection is in the prompt.** The
-  lighting, the finish and the margin in the frame are pinned so every sticker
-  matches every other one. The viewing angle deliberately is *not* — it stays
-  whatever the player shot, because inventing a three-quarter view means
-  inventing bodywork nobody photographed.
+- **What makes a grid of *redrawn* stickers read as a collection is in the
+  prompt.** The lighting, the finish and the margin in the frame are pinned so
+  every sticker matches every other one. The viewing angle deliberately is *not* —
+  it stays whatever the player shot, because inventing a three-quarter view means
+  inventing bodywork nobody photographed. A grid of **die-cuts** is held together
+  by geometry alone — same canvas, same edge, same margin — and keeps the light of
+  each photograph, which is exactly the uniformity the redraw is sold on. That is
+  the honest limit of the free tier, and the argument « Embellir » makes.
 - **RevenueCat's `CustomerInfo` is the only source of truth for Pro.** The
   `isPro` store flag is a cache so the UI does not flicker on cold start; it is
   written from a `CustomerInfo`, never from a completed transaction. A failed

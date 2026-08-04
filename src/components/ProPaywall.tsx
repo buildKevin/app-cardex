@@ -23,7 +23,9 @@ import { Text } from './Text';
 
 const PERKS = [
   'Scans illimités',
-  `${PRO_RESTYLE_LIMIT} stickers par mois`,
+  // "embellis" rather than "stickers": the free tier has stickers now, one per
+  // car, for ever. A perk promising what the player already owns sells nothing.
+  `${PRO_RESTYLE_LIMIT} stickers embellis par mois`,
   'Toutes les futures fonctionnalités',
   'Badge Pro sur ton profil',
   'Aucune publicité, jamais',
@@ -101,8 +103,12 @@ export function ProPaywall({
           </Text>
 
           <Text variant="display" style={styles.title}>
+            {/* Not "ton sticker offert est utilisé" any more: nothing has been
+                used up, and the player is holding a sticker of their own car as
+                they read this. What is being sold is the better version of the
+                thing on screen, so the copy points at it. */}
             {fromRestyle
-              ? 'Ton sticker offert\nest utilisé'
+              ? 'Ce sticker peut\nêtre redessiné'
               : fromLimit
                 ? 'Tes 10 scans gratuits\nsont utilisés'
                 : 'Débloque\nCarDex Pro'}
@@ -110,7 +116,7 @@ export function ProPaywall({
 
           <Text variant="body" tone="secondary" style={styles.subtitle}>
             {fromRestyle
-              ? `Passe Pro pour ${PRO_RESTYLE_LIMIT} stickers par mois, et transforme toute ta collection.`
+              ? `Ta voiture est découpée dans ta photo. Passe Pro pour la faire redessiner par l'IA — ${PRO_RESTYLE_LIMIT} par mois, de quoi embellir toute ta collection.`
               : fromLimit
                 ? `La version gratuite s'arrête à ${FREE_SCAN_LIMIT} scans. Passe Pro pour continuer à collectionner.`
                 : 'Scanne sans limite et garde ta collection à jour.'}

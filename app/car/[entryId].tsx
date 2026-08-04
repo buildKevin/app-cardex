@@ -148,6 +148,7 @@ export default function CarDetail() {
         onPress: () => {
           deletePhoto(entry.photoUri);
           deletePhoto(entry.styledPhotoUri ?? null);
+          deletePhoto(entry.diecutUri ?? null);
           if (entry.remoteId) {
             deleteRemoteEntry(entry.remoteId).catch((error) =>
               captureError(error, { stage: 'delete_remote_entry' }),

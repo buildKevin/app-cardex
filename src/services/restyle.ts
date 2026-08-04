@@ -2,8 +2,13 @@ import { hasSupabase } from './env';
 import { supabase } from './supabase';
 
 /**
- * Sticker generation — the garage photo redrawn by an image model as a die-cut
+ * The *paid* sticker — the garage photo redrawn by an image model as a die-cut
  * collectible, for the garage grid and the showcase.
+ *
+ * Not the only sticker any more, and no longer the free one. Every car is cut out
+ * on the device by `diecut.ts` the moment it is scanned, for nothing; this is the
+ * upgrade « Embellir » sells, and `begin_restyle()` now refuses it to anyone who
+ * is not Pro. The two never share a code path, a field or an event.
  *
  * Everything happens server-side in the `restyle-photo` edge function: it holds
  * the model key, owns the allowance, and builds the prompt. The client never

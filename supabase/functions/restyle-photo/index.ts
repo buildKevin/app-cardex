@@ -84,7 +84,15 @@ function providerKey(): string {
   return PROVIDER === 'gemini' ? GEMINI_KEY : OPENAI_KEY;
 }
 
-const FREE_RESTYLE_LIMIT = Number(Deno.env.get('FREE_RESTYLE_LIMIT') ?? '1');
+/**
+ * Zero: the free sticker is the on-device die-cut, which never gets here because
+ * it never leaves the phone. This function only ever draws the paid one.
+ *
+ * Still read from the environment, and still passed explicitly rather than left
+ * to the SQL default — the number is a product decision, and being able to hand a
+ * cohort one free redraw without a deploy is worth the argument.
+ */
+const FREE_RESTYLE_LIMIT = Number(Deno.env.get('FREE_RESTYLE_LIMIT') ?? '0');
 const PRO_RESTYLE_LIMIT = Number(Deno.env.get('PRO_RESTYLE_LIMIT') ?? '30');
 
 /** Wall-clock guard: an image call that hangs must fail, not hold the worker. */

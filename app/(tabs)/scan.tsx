@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../../src/components/Button';
 import { Text } from '../../src/components/Text';
 import { breadcrumb, captureError, events, track } from '../../src/services/analytics';
+import { createDiecut } from '../../src/services/diecut';
 import { preparePhoto } from '../../src/services/photo';
 import { VisionError, identifyCar, visionMode } from '../../src/services/vision';
 import { pushEntry } from '../../src/services/sync';
@@ -49,6 +50,7 @@ export default function Scan() {
   const isPro = useGameStore((state) => state.isPro);
   const accountId = useGameStore((state) => state.profile.accountId);
   const markSynced = useGameStore((state) => state.markSynced);
+  const setDiecut = useGameStore((state) => state.setDiecut);
   const scanCount = useGameStore((state) => state.scanCount);
   const garage = useGameStore((state) => state.garage);
   const left = useScansLeft();
@@ -135,6 +137,14 @@ export default function Scan() {
       const charged = matched || entry.discovered != null;
       if (charged) consumeScan();
 
+      // Awaited, and before the reveal: this is the card's face, so the payoff
+      // frame has to be the sticker itself. Showing the photograph and swapping
+      // it a moment later is the "two half-finished apps" the display rule exists
+      // to prevent — and 200 ms on the end of a model call nobody notices.
+      breadcrumb('scan: lifting the car out');
+      const diecut = await createDiecut(photo.uri);
+      if (diecut) setDiecut(entry.id, diecut);
+
       track(events.scanSucceeded, {
         make: entry.make,
         model: entry.model,
@@ -151,6 +161,10 @@ export default function Scan() {
         confidence: Math.round(result.confidence * 100) / 100,
         duration_ms: Date.now() - startedAt,
         mode: visionMode,
+        // Whether the card leaves here as a sticker or as a snapshot. A property
+        // rather than a success event of its own: this is the once-per-car
+        // measurement, and `diecut_failed` carries the reason when it is false.
+        has_diecut: Boolean(diecut),
         // Whether this car was already in the garage. A collection game whose
         // players mostly rescan the same Clio has a catalogue problem.
         duplicate: garage.some((item) => item.id !== entry.id && item.carId === entry.carId && entry.carId !== null),

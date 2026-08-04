@@ -1,14 +1,34 @@
 # Stickers de catalogue — supprimer l'attente et le coût par joueur
 
-État au 03/08/2026. **Rien de ce document n'est commencé.** C'est un plan, pas un
-compte rendu. À reprendre quand on voudra baisser les coûts d'image.
+> ## ⛔ Abandonné le 04/08/2026 — gardé pour son analyse, pas pour son plan
+>
+> Le plan central de ce document — **pré-générer un asset par modèle de voiture,
+> une fois pour les 125 du catalogue** — n'est pas ce qui a été construit. Le
+> problème a été résolu autrement : le sticker gratuit est maintenant **détouré
+> sur l'appareil** (`modules/cardex-diecut`, Vision + Core Image, ~200 ms, 0 $,
+> hors ligne), et l'appel IA est devenu l'option payante derrière « Embellir ».
+> La décision et son raisonnement sont dans [`COSTS.md`](COSTS.md) §6.
+>
+> Trois raisons, résumées : un asset canonique n'est pas *ta* voiture ; le
+> détourage supprime les 30 secondes pour **toutes** les voitures et pas
+> seulement pour 125 ; et le paywall gagne à vendre un écart de qualité visible
+> plutôt qu'un compteur épuisé.
+>
+> **Ce qui reste vrai et vaut d'être lu :** la section « Ce que fait la
+> concurrence » ci-dessous, qui explique pourquoi leur sticker est instantané, et
+> le diagnostic de l'uniformité — c'est précisément ce que le détourage ne sait
+> pas faire, donc c'est l'argument de vente de Pro. Voir aussi `COSTS.md` §5.5,
+> où cette objection est reprise et corrigée sur un point.
+>
+> À rouvrir si un jour on veut une grille parfaitement homogène côté gratuit.
 
 ---
 
-## Ce qui existe aujourd'hui
+## Ce qui existait quand ce document a été écrit
 
-La génération se fait **par photo et par joueur**, dans
-`supabase/functions/restyle-photo/index.ts` (déployée) :
+La génération se faisait **par photo et par joueur**, dans
+`supabase/functions/restyle-photo/index.ts` (déployée — et c'est toujours le
+chemin du sticker *payant*) :
 
 - Le client envoie un id d'entrée, jamais une image. La fonction lit la photo
   dans le bucket `scans`, vérifie la propriété sur `garage`, construit le prompt.
@@ -16,16 +36,19 @@ La génération se fait **par photo et par joueur**, dans
   `input_fidelity: high`, `quality: high`, sortie carrée 1024².
 - Comptabilité en deux temps autour de l'appel : `begin_restyle()` refuse avant
   de payer, `commit_restyle()` ne facture que sur un résultat stocké. Gratuit :
-  **un sticker à vie**. Pro : 30 par mois.
+  **un sticker à vie** — c'est ce qui est passé à **zéro**. Pro : 30 par mois.
 - Le résultat va dans `styled_photo_path`, et `src/lib/photo.ts` est le seul
   endroit qui décide quelle image un écran affiche (`displayPhoto`,
-  `originalPhoto`, `isSticker`).
+  `originalPhoto`, `isSticker`) — il arbitre maintenant entre **trois** images,
+  le redessin gagnant sur le die-cut, qui gagne sur la photo.
 
-Les deux conséquences qui motivent ce document :
+Les deux conséquences qui motivaient ce document :
 
-1. **~30 secondes d'attente** entre le clic et le sticker.
+1. **~30 secondes d'attente** entre le clic et le sticker. *Résolu par le
+   détourage, pour le gratuit.*
 2. **Un coût variable sur l'expérience centrale** : chaque sticker de chaque
-   joueur est un appel d'image facturé.
+   joueur est un appel d'image facturé. *Résolu : le gratuit ne coûte plus rien,
+   et l'appel facturé est devenu un achat.*
 
 ---
 

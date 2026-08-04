@@ -409,9 +409,13 @@ drop function if exists public.consume_scan(uuid, integer);
 -- Same two-phase shape as the scan counters, and the reasoning transfers: an
 -- image call costs 10-40x a vision call, so refusing before we pay and charging
 -- only on success matters more here, not less.
+--
+-- p_free_limit is 0: the free sticker is the on-device die-cut, which never
+-- reaches this function because it never reaches a server. The redraw is what
+-- « Embellir » sells, and it is Pro-only.
 create or replace function public.begin_restyle(
   p_user_id      uuid,
-  p_free_limit   integer default 1,
+  p_free_limit   integer default 0,
   p_pro_limit    integer default 30,
   p_call_ceiling integer default 3
 )
@@ -436,9 +440,10 @@ begin
     return false;
   end if;
 
-  -- Only Pro's window rolls over. A free player gets one rendering *ever*, not
-  -- one a month — rolling their counter would quietly hand out twelve a year
-  -- and there would be no second click that ever reaches the paywall.
+  -- Still only Pro's window, and the reason has changed rather than gone: a free
+  -- player has no allowance to roll over at all now. Rolling the counter anyway
+  -- would be harmless today and a twelve-a-year giveaway the moment p_free_limit
+  -- was ever raised again, so the guard stays.
   if v_pro and v_start < v_month then
     update public.users
        set restyle_count = 0,
