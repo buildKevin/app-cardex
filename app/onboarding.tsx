@@ -33,7 +33,7 @@ import { RarityTag } from '../src/components/RarityTag';
 import { StickerReveal } from '../src/components/StickerReveal';
 import { Text } from '../src/components/Text';
 import { CARS_BY_BRAND } from '../src/data/cars';
-import type { Brand, Car } from '../src/data/types';
+import type { Brand, Car, GarageEntry } from '../src/data/types';
 import { armGarageDoor, armWelcomePaywall } from '../src/lib/welcome';
 import { resolveScan } from '../src/lib/match';
 import { brandReaction, carReaction, carSpecLine } from '../src/lib/onboardingBanter';
@@ -54,7 +54,7 @@ import { restoreGarage } from '../src/services/restoreGarage';
 import { RestyleError, restyleAvailable, restylePhoto } from '../src/services/restyle';
 import { pushEntry } from '../src/services/sync';
 import { useGameStore, useGarageEntry } from '../src/store/useGameStore';
-import { colors, fonts, gutter, motion, radii, spacing, type, withAlpha } from '../src/theme';
+import { colors, fonts, gutter, motion, radii, shadow, spacing, type, withAlpha } from '../src/theme';
 
 /**
  * Onboarding, as a conversation.
@@ -199,6 +199,23 @@ function emptyPayoffCopy(returning: boolean, restored: number, name: string): st
   return `À toi de jouer, ${name || 'collectionneur'}. Cadre une voiture dans la rue et elle rejoint ton garage.`;
 }
 
+/**
+ * The restored cars the payoff can put on screen, stickers first.
+ *
+ * "Tes 3 voitures t'attendent dans le garage" over an empty silhouette asks the
+ * player to take our word for it — showing the cars themselves is the proof, and
+ * the stickers among them are the things the player *made*, which is why they
+ * outrank plain photographs here. Stable sort, so within each group the pull's
+ * own recency order survives. Capped because this is a glimpse of the garage,
+ * not the garage: the button below is the way in.
+ */
+function restoredPreview(garage: GarageEntry[]): GarageEntry[] {
+  return garage
+    .filter((entry) => displayPhoto(entry) != null)
+    .sort((a, b) => Number(Boolean(b.styledPhotoUri)) - Number(Boolean(a.styledPhotoUri)))
+    .slice(0, PAYOFF_FAN_TILT.length);
+}
+
 export default function Onboarding() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -248,6 +265,9 @@ export default function Onboarding() {
   const appleAvailable = isAppleSignInAvailable();
 
   const entry = useGarageEntry(entryId);
+  // The whole garage, for the returning payoff: the cars `restoreGarage` just
+  // merged are the only proof the restore worked that the player can recognise.
+  const garage = useGameStore((state) => state.garage);
 
   const completeOnboarding = useGameStore((state) => state.completeOnboarding);
   const setAccount = useGameStore((state) => state.setAccount);
@@ -628,6 +648,7 @@ export default function Onboarding() {
     const photo = entry ? displayPhoto(entry) : null;
     const sticker = Boolean(entry && isSticker(entry, photo));
     const accent = entry ? rarityColor(entry.rarity) : colors.accent;
+    const preview = !entry && restored > 0 ? restoredPreview(garage) : [];
 
     const overline = entry
       ? 'Ta première carte'
@@ -669,7 +690,9 @@ export default function Onboarding() {
         </Animated.View>
 
         {/* No card without a photo, and no empty frame either: a bordered plate
-            around a silhouette reads as a card that failed to load. */}
+            around a silhouette reads as a card that failed to load. A returning
+            player gets the next best thing to a card — the cars the restore
+            just brought back. */}
         {entry ? (
           <Animated.View
             entering={ZoomIn.delay(80).duration(motion.reveal)}
@@ -699,6 +722,43 @@ export default function Onboarding() {
               </View>
             </View>
           </Animated.View>
+        ) : preview.length ? (
+          /* The returning player's cars, back from the server — stickers loose
+             on the canvas, photographs on their plate, exactly the rule the
+             garage grid draws them by. Fanned rather than gridded: this is the
+             garage waving through the door, not the garage. */
+          <View style={styles.fan}>
+            {preview.map((item, index) => {
+              const face = displayPhoto(item);
+              if (!face) return null;
+              const cut = isSticker(item, face);
+              return (
+                <Animated.View
+                  key={item.id}
+                  entering={ZoomIn.delay(120 + index * 140).duration(motion.reveal)}
+                  style={[
+                    styles.fanItem,
+                    { transform: [{ rotate: `${PAYOFF_FAN_TILT[index]}deg` }] },
+                  ]}
+                >
+                  <View style={[styles.fanPlate, cut && styles.fanPlateSticker]}>
+                    {/* Clipping is for a photo bleeding to the plate's edge; on
+                        the plate itself it would eat the shadow. */}
+                    <View style={[styles.fanClip, cut && styles.fanClipOpen]}>
+                      <Image
+                        source={{ uri: face }}
+                        style={[StyleSheet.absoluteFill, cut && styles.fanSticker]}
+                        // A die-cut sticker cropped to fill is a die-cut sticker
+                        // with its edge cut off.
+                        contentFit={cut ? 'contain' : 'cover'}
+                        transition={220}
+                      />
+                    </View>
+                  </View>
+                </Animated.View>
+              );
+            })}
+          </View>
         ) : (
           <Animated.View entering={FadeIn.delay(80).duration(motion.slow)} style={styles.emptyArt}>
             <CarSilhouette width={PAYOFF_SILHOUETTE} color={colors.silhouette} />
@@ -1036,6 +1096,9 @@ function Chip({ label, onPress, muted }: { label: string; onPress: () => void; m
 
 const PAYOFF_GLOW = 520;
 const PAYOFF_SILHOUETTE = 180;
+/** One tilt per card in the restored fan — its length is also the cap. */
+const PAYOFF_FAN_TILT = [-7, 4, -3];
+const PAYOFF_FAN_CARD = 124;
 
 const styles = StyleSheet.create({
   root: {
@@ -1153,6 +1216,46 @@ const styles = StyleSheet.create({
   emptyArt: {
     marginTop: spacing.xxxl,
     alignItems: 'center',
+  },
+  fan: {
+    marginTop: spacing.xxxl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fanItem: {
+    width: PAYOFF_FAN_CARD,
+    height: PAYOFF_FAN_CARD,
+    // Overlapping like stickers slapped on a case, not cells in a grid.
+    marginHorizontal: -spacing.md,
+  },
+  fanPlate: {
+    flex: 1,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
+    ...shadow.card,
+  },
+  /**
+   * Same rule as the garage grid: a sticker is already an object with its own
+   * outline, and a grey plate behind it puts it back in the box the die-cut
+   * took it out of. The shadow moves onto the image, where it follows the
+   * silhouette.
+   */
+  fanPlateSticker: {
+    backgroundColor: 'transparent',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  fanClip: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+  },
+  fanClipOpen: {
+    overflow: 'visible',
+  },
+  fanSticker: {
+    ...shadow.card,
   },
   cardBody: {
     padding: spacing.xl,
