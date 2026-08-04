@@ -129,11 +129,10 @@ pourquoi de chaque ligne.
       `getaddrinfo ENOTFOUND api.expo.dev`, purement transitoire. Le build était
       déjà signé — inutile de le refaire, il suffit de relancer
       `eas submit --platform ios --profile production --path build-<ts>.ipa`.
-- [ ] **B5.** Localisation du groupe d'abonnements : l'écran *Créer une
-      soumission* refuse avec « votre abonnement doit être envoyé avec
-      l'abonnement groupé associé ». C'est bien un blocage, contrairement à ce
-      que j'avais conclu plus tôt. Monétisation → Abonnements → **le nom du
-      groupe** `CarDex Pro` → Localisations → Français (France).
+- [x] **B5.** ✅ Localisation Français (France) du groupe d'abonnements
+      `CarDex Pro` en place (04/08/2026). C'était bien un blocage : l'écran
+      *Créer une soumission* refusait avec « votre abonnement doit être envoyé
+      avec l'abonnement groupé associé » tant qu'elle manquait.
 
 ### C — À vérifier sur le build réel, avec moi
 
