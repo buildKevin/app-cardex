@@ -129,13 +129,13 @@ Les cinq écrans qui vendent CarDex, dans cet ordre :
 2. Le scanner en visée sur une voiture
 3. La révélation d'une voiture rare, avec ses XP
 4. L'onglet Collections et ses marques
-5. Un restylage, avant / après si tu peux le composer
+5. Un sticker « Embellir », avant / après si tu peux le composer
 
 ### Les champs texte
 
 | Champ | Limite | Valeur |
 | --- | --- | --- |
-| Texte promotionnel | 170 | `Nouveau : mets tes voitures en scène. Le restylage rejoue ta photo dans un décor de studio, de circuit ou de bord de mer.` |
+| Texte promotionnel | 170 | `Nouveau : chaque voiture scannée devient un sticker, détouré automatiquement sur ton téléphone. Et « Embellir » le redessine en illustration de collection.` |
 | Mots-clés | 100 | voir ci-dessous |
 | URL de support | — | `https://playful-text-ba5.notion.site/Support-CarDex-3b1b30ab77048015aa85efbd94fcd82f` |
 | URL marketing | — | facultatif, laisse vide |
@@ -186,16 +186,18 @@ Tu tombes sur une Pagani ? Elle n'est pas dans le catalogue, et pourtant elle es
 notée : une fiche est créée, et elle vaudra la même chose pour tout le monde. Ta
 découverte enrichit le jeu de tous les joueurs.
 
-TES PHOTOS, EN STUDIO
+TES VOITURES, EN STICKERS
 
-Le restylage rejoue la photo de ton garage dans un décor — circuit, garage,
-bord de mer. L'originale n'est jamais écrasée, tu peux revenir en arrière quand
+Chaque voiture scannée est détourée automatiquement, directement sur ton
+téléphone : ton garage est une planche de stickers, pas une pellicule photo.
+Et « Embellir » va plus loin — ta photo est redessinée en illustration de
+collection. L'originale n'est jamais écrasée, tu peux revenir en arrière quand
 tu veux.
 
 CARDEX PRO
 
-La version gratuite donne 10 scans et un restylage. CarDex Pro lève la limite de
-scans et donne 30 restylages par mois.
+La version gratuite donne 10 scans, et le sticker découpé sur chaque voiture.
+CarDex Pro lève la limite de scans et débloque « Embellir », 30 par mois.
 
 - Mensuel 4,99 €
 - Annuel 29,99 €
@@ -269,10 +271,12 @@ Trois produits : abonnement mensuel, abonnement annuel, et un non-consommable à
 vie. Les trois débloquent le même accès.
 
 CONFIDENTIALITÉ
-Les photos prises sont envoyées à un service d'identification tiers, et pour la
-fonction de restylage à un service de génération d'images. C'est décrit dans la
-politique de confidentialité, accessible depuis le paywall et depuis le profil.
-La photo de profil, elle, ne quitte jamais l'appareil.
+Les photos prises sont envoyées à un service d'identification tiers, et — pour
+la fonction « Embellir », réservée aux abonnés — à un service de génération
+d'images. Le sticker détouré affiché après chaque scan est, lui, fabriqué sur
+l'appareil, sans envoi. C'est décrit dans la politique de confidentialité,
+accessible depuis le paywall et depuis le profil. La photo de profil, elle, ne
+quitte jamais l'appareil.
 
 Nous restons disponibles pour toute question.
 ```
