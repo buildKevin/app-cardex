@@ -121,12 +121,11 @@ pourquoi de chaque ligne.
 - [x] **B2.** ✅ `kevinstacchett@gmail.com` substituée dans `docs/legal/`
       (5 occurrences) — la source du repo et les pages Notion concordent
 - [x] **B3.** ✅ La feature restyle est commitée (`7e87144`), l'arbre est propre
-- [~] **B4.** `buildNumber 10` construit en local et **uploadé sur TestFlight**
-      le 03/08/2026. Il sert à tester les achats et à prendre la capture A11 —
-      **il ne contient pas le correctif A18**, compilé après. Un `buildNumber 11`
-      est nécessaire avant l'examen.
-      Note pour la prochaine fois : l'upload a d'abord échoué sur
-      `getaddrinfo ENOTFOUND api.expo.dev`, purement transitoire. Le build était
+- [x] **B4.** ✅ `buildNumber 13` sur **TestFlight** (04/08/2026). Il contient le
+      correctif A18 (client `eb0cece`, compilé après le build 10) — c'est sur lui
+      qu'on passe les vérifications C1–C8 et qu'on prend la capture A11.
+      Note pour la prochaine fois : un upload peut échouer sur
+      `getaddrinfo ENOTFOUND api.expo.dev`, purement transitoire. Le build est
       déjà signé — inutile de le refaire, il suffit de relancer
       `eas submit --platform ios --profile production --path build-<ts>.ipa`.
 - [x] **B5.** ✅ Localisation Français (France) du groupe d'abonnements
