@@ -66,11 +66,13 @@ pourquoi de chaque ligne.
       une sur les trois, mais elle montre les prix Test Store en dollars. À
       reprendre depuis TestFlight, une fois le build en ligne — le simulateur ne
       charge pas les produits sandbox de façon fiable.
-- [ ] **A12.** **Captures marketing en 1320 × 2868** (emplacement 6,9″), 3 mini,
-      5 conseillées. Sans rapport avec A11. **Un iPhone 17 Pro sort du
-      1206 × 2622 et Apple le refuse** — c'est le Pro Max qui donne la bonne
-      taille, vérifié sur cette machine. Un redimensionnement `sips` suffit, les
-      deux rapports d'aspect sont identiques à 0,06 %.
+- [~] **A12.** Captures marketing **générées** (04/08/2026) : trois visuels dans
+      `marketing/appstore/` (1320 × 2868, emplacement 6,9″) et le même jeu dans
+      `marketing/appstore-6.5/` (1242 × 2688, emplacement 6,5″, optionnel).
+      Sources ChatGPT dans `marketing/source/` — rognées de 12 px (coins noirs
+      d'artefact), agrandies à la largeur cible, centrées sur canevas blanc.
+      Reste à les téléverser dans App Store Connect, section par section : le
+      jeu 1320 va dans 6,9″, pas dans 6,5″ qui le refuse. 3 mini, 5 conseillées.
 - [x] **A13.** ✅ *Informations sur l'app* (nom, sous-titre, catégories Style de
       vie / Jeux, droits sur le contenu) **et** page de la version 1.0
       (description, mots-clés, texte promo, URL de support, copyright).
