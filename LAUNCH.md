@@ -98,14 +98,14 @@ pourquoi de chaque ligne.
       commit. Le raisonnement : se tromper est réversible par une mise à jour,
       retirer préventivement est un coût certain payé au lancement. Corollaire
       non négociable : **aucun nom de marque dans les mots-clés App Store**.
-- [ ] **A18.** ⚠️ **Décidé (option A), reste un interrupteur à toi** : Supabase →
-      Authentication → Providers → **Anonymous → Enable**. Le code est fait
-      (`eb0cece`) : « Continuer sans compte » crée désormais un vrai utilisateur
-      anonyme. **Sans l'interrupteur, le repli local s'applique et le scan
-      échoue** — c'était le bug : `identify-car` répond 401 à tout ce qui n'est
-      pas un jeton d'utilisateur, donc l'unique parcours annoncé comme sans
-      compte était le seul incapable de scanner, alors que la note de review dit
-      au vérificateur d'appuyer sur ce bouton.
+- [x] **A18.** ✅ Connexion anonyme **activée** sur le projet hébergé (Supabase →
+      Authentication → Providers → Anonymous), le 04/08/2026. Le code était déjà
+      prêt (`eb0cece`) : « Continuer sans compte » crée un vrai utilisateur
+      anonyme, donc le scan fonctionne sur le parcours que la note de review
+      demande au vérificateur d'emprunter. Pour mémoire, le bug que ça ferme :
+      `identify-car` répond 401 à tout ce qui n'est pas un jeton d'utilisateur,
+      donc sans l'interrupteur l'unique parcours annoncé comme sans compte était
+      le seul incapable de scanner.
 - [x] **A20.** ✅ Le « à vie » est en *Ready to Submit* : sa localisation, sa
       capture, son prix et sa catégorie fiscale sont donc complets. Les deux
       abonnements restent en *Missing Metadata* avec les **mêmes** métadonnées —
@@ -173,12 +173,10 @@ matériel tiers protégé sans autorisation, et Ferrari est notoirement procédu
 
 ### 1.2 Connexion anonyme sur le projet hébergé
 
-Aujourd'hui **désactivée** — je ne l'ai pas activée sur ta prod, c'est un arbitrage.
-
-- **Activée** : « Continuer sans compte » crée un vrai utilisateur Supabase, donc la
-  synchro et le compteur de scans serveur fonctionnent même sans compte social.
-- **Désactivée** : « Continuer sans compte » reste purement local, sans sauvegarde
-  serveur. Vecteur d'abus nul.
+✅ **Activée** (A18, 04/08/2026) : « Continuer sans compte » crée un vrai utilisateur
+Supabase, donc la synchro et le compteur de scans serveur fonctionnent même sans
+compte social. L'alternative (désactivée = parcours purement local, vecteur d'abus
+nul) a été écartée parce qu'elle cassait le scan sur le parcours sans compte.
 
 Dashboard → Authentication → Providers → Anonymous.
 
