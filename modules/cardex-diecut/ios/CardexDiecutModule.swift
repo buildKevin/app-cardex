@@ -218,31 +218,31 @@ public class CardexDiecutModule: Module {
   }
 }
 
-internal final class UnsupportedVersionException: Exception {
+internal final class UnsupportedVersionException: Exception, @unchecked Sendable {
   override var reason: String {
     "Lifting a subject needs iOS 17 or later"
   }
 }
 
-internal final class BadPathException: Exception {
+internal final class BadPathException: Exception, @unchecked Sendable {
   override var reason: String {
     "Source or destination is not a usable file path"
   }
 }
 
-internal final class UnreadablePhotoException: Exception {
+internal final class UnreadablePhotoException: Exception, @unchecked Sendable {
   override var reason: String {
     "Could not read the photograph"
   }
 }
 
-internal final class NoSubjectException: Exception {
+internal final class NoSubjectException: Exception, @unchecked Sendable {
   override var reason: String {
     "No subject found in the photograph"
   }
 }
 
-internal final class RenderFailedException: Exception {
+internal final class RenderFailedException: Exception, @unchecked Sendable {
   override var reason: String {
     "Could not encode the sticker"
   }
