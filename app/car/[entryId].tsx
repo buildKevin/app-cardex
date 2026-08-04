@@ -1,3 +1,4 @@
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -18,6 +19,7 @@ import { formatDiscoveredAt, formatPower, formatPrice } from '../../src/lib/form
 import { displayPhoto, hasBothPhotos, isSticker, originalPhoto } from '../../src/lib/photo';
 import { RARITY_LABEL, rarityColor } from '../../src/lib/rarity';
 import { captureError, events, track } from '../../src/services/analytics';
+import { isGalleryAvailable, saveToGallery } from '../../src/services/gallery';
 import { deletePhoto } from '../../src/services/photo';
 import { deleteRemoteEntry } from '../../src/services/sync';
 import { SHOWCASE_SIZE, useEntryCar, useGameStore } from '../../src/store/useGameStore';
@@ -36,6 +38,10 @@ export default function CarDetail() {
   // else, and this only peeks at the photograph behind it — making the fiche the
   // one way back to what the camera actually saw.
   const [showOriginal, setShowOriginal] = useState(false);
+
+  // `saved` is terminal on purpose: the library keeps the copy, so a second tap
+  // would only litter the player's gallery with duplicates.
+  const [stickerSave, setStickerSave] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   // The card is reachable from the garage grid, the hero, a collection slot, the
   // showcase and the reveal, so `$screen`'s `previous_screen` is what says which
@@ -61,7 +67,7 @@ export default function CarDetail() {
     return (
       <Screen>
         <Text variant="headline" tone="secondary">
-          Cette voiture n'est plus dans ton garage.
+          {"Cette voiture n'est plus dans ton garage."}
         </Text>
       </Screen>
     );
@@ -93,6 +99,44 @@ export default function CarDetail() {
       rarity: entry.rarity,
       has_styled_photo: Boolean(entry.styledPhotoUri),
     });
+  };
+
+  const onSaveSticker = async () => {
+    if (stickerSave !== 'idle' || !entry.styledPhotoUri) return;
+    setStickerSave('saving');
+
+    try {
+      const result = await saveToGallery(entry.styledPhotoUri, entry.styledPhotoPath);
+
+      if (result === 'saved') {
+        track(events.stickerSaved, {
+          rarity: entry.rarity,
+          brand_id: entry.brandId,
+          in_catalogue: entry.carId !== null,
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        setStickerSave('saved');
+        return;
+      }
+
+      setStickerSave('idle');
+      track(events.stickerSaveFailed, { reason: result });
+      if (result === 'denied') {
+        Alert.alert(
+          'Accès refusé',
+          'Autorise CarDex à ajouter des photos dans Réglages pour enregistrer tes stickers.',
+        );
+      } else {
+        Alert.alert('Indisponible', "L'enregistrement n'est pas disponible sur cette version.");
+      }
+    } catch (error) {
+      setStickerSave('idle');
+      // Both, on purpose: the event is what a funnel counts, the exception is
+      // what says why.
+      track(events.stickerSaveFailed, { reason: 'error' });
+      captureError(error, { stage: 'save_sticker' });
+      Alert.alert('Enregistrement impossible', 'Réessaie dans un instant.');
+    }
   };
 
   const onDelete = () => {
@@ -166,6 +210,34 @@ export default function CarDetail() {
             </View>
           </Pressable>
         ) : null}
+
+        {/* Only over the sticker itself — saving is about the thing on screen,
+            and the raw photograph is already in the player's library. Hidden
+            when the native module is missing (Expo Go, a build older than the
+            pod), because a button that only ever apologises is worse than none. */}
+        {isSticker(entry, hero) && isGalleryAvailable() ? (
+          <Pressable
+            onPress={onSaveSticker}
+            hitSlop={8}
+            disabled={stickerSave === 'saving'}
+            style={styles.save}
+          >
+            <View style={[styles.compareChip, styles.saveChip]}>
+              <Icon
+                name={stickerSave === 'saved' ? 'check' : 'download'}
+                size={14}
+                color={colors.textInverted}
+              />
+              <Text variant="caption" color={colors.textInverted}>
+                {stickerSave === 'saving'
+                  ? 'Enregistrement…'
+                  : stickerSave === 'saved'
+                    ? 'Enregistré'
+                    : 'Enregistrer'}
+              </Text>
+            </View>
+          </Pressable>
+        ) : null}
       </View>
 
       <View style={styles.content}>
@@ -201,8 +273,7 @@ export default function CarDetail() {
 
         {fiche.source === 'unknown' ? (
           <Text variant="caption" tone="tertiary" style={styles.note}>
-            Cette voiture n'est pas encore dans notre catalogue, donc certaines caractéristiques
-            manquent. Elle compte quand même dans ton garage.
+            {"Cette voiture n'est pas encore dans notre catalogue, donc certaines caractéristiques manquent. Elle compte quand même dans ton garage."}
           </Text>
         ) : null}
 
@@ -260,6 +331,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radii.pill,
     backgroundColor: colors.overlay,
+  },
+  save: {
+    position: 'absolute',
+    right: spacing.md,
+    bottom: spacing.md,
+  },
+  saveChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   content: {
     paddingHorizontal: gutter,

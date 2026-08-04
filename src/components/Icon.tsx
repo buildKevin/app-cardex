@@ -15,7 +15,8 @@ export type IconName =
   | 'bolt'
   | 'badge'
   | 'camera'
-  | 'star';
+  | 'star'
+  | 'download';
 
 interface IconProps {
   name: IconName;
@@ -94,6 +95,13 @@ export function Icon({ name, size = 24, color = colors.text, strokeWidth = 1.5 }
         <>
           <Circle cx={12} cy={9.6} r={5.6} {...stroke} />
           <Path d="M8.4 14.4 7 21l5-2.4 5 2.4-1.4-6.6" {...stroke} />
+        </>
+      ) : null}
+
+      {name === 'download' ? (
+        <>
+          <Path d="M12 4v10.5M7.5 10.5 12 15l4.5-4.5" {...stroke} />
+          <Path d="M4.5 15.5v2.1A2.4 2.4 0 0 0 6.9 20h10.2a2.4 2.4 0 0 0 2.4-2.4v-2.1" {...stroke} />
         </>
       ) : null}
 

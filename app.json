@@ -58,6 +58,12 @@
       ],
       "expo-web-browser",
       [
+        "expo-media-library",
+        {
+          "savePhotosPermission": "CarDex enregistre tes stickers dans ta galerie photo quand tu le demandes."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",

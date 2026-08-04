@@ -186,6 +186,10 @@ export const events = {
   carOpened: 'car_opened',
   carRemoved: 'car_removed',
   photoCompared: 'photo_compared',
+  // A sticker leaving the app for the photo library — the closest thing we have
+  // to a player *sharing* one.
+  stickerSaved: 'sticker_saved',
+  stickerSaveFailed: 'sticker_save_failed',
   collectionOpened: 'collection_opened',
   collectionsOpened: 'collections_opened',
   collectionsViewChanged: 'collections_view_changed',
