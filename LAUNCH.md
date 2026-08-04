@@ -66,13 +66,12 @@ pourquoi de chaque ligne.
       une sur les trois, mais elle montre les prix Test Store en dollars. À
       reprendre depuis TestFlight, une fois le build en ligne — le simulateur ne
       charge pas les produits sandbox de façon fiable.
-- [~] **A12.** Captures marketing **générées** (04/08/2026) : trois visuels dans
-      `marketing/appstore/` (1320 × 2868, emplacement 6,9″) et le même jeu dans
-      `marketing/appstore-6.5/` (1242 × 2688, emplacement 6,5″, optionnel).
+- [x] **A12.** ✅ Captures marketing **téléversées** (04/08/2026) : trois visuels
+      depuis `marketing/appstore/` (1320 × 2868, emplacement 6,9″) et le même jeu
+      depuis `marketing/appstore-6.5/` (1242 × 2688, emplacement 6,5″).
       Sources ChatGPT dans `marketing/source/` — rognées de 12 px (coins noirs
       d'artefact), agrandies à la largeur cible, centrées sur canevas blanc.
-      Reste à les téléverser dans App Store Connect, section par section : le
-      jeu 1320 va dans 6,9″, pas dans 6,5″ qui le refuse. 3 mini, 5 conseillées.
+      Piège rencontré : chaque jeu va dans **sa** section, le 6,5″ refuse le 1320.
 - [x] **A13.** ✅ *Informations sur l'app* (nom, sous-titre, catégories Style de
       vie / Jeux, droits sur le contenu) **et** page de la version 1.0
       (description, mots-clés, texte promo, URL de support, copyright).
