@@ -33,6 +33,7 @@ import { RarityTag } from '../src/components/RarityTag';
 import { StickerReveal } from '../src/components/StickerReveal';
 import { Text } from '../src/components/Text';
 import { CARS_BY_BRAND } from '../src/data/cars';
+import { ONBOARDING_DEMO } from '../src/data/onboardingDemo';
 import type { Brand, Car, GarageEntry } from '../src/data/types';
 import { armGarageDoor, armWelcomePaywall } from '../src/lib/welcome';
 import { resolveScan } from '../src/lib/match';
@@ -77,6 +78,18 @@ import { colors, fonts, gutter, motion, radii, shadow, spacing, type, withAlpha 
  *   photo-less card can never be turned into a sticker, so it would be the one
  *   card in the garage with a permanently dead button on it.
  *
+ * Between the third question and the photo sits a *demonstration*, on a car that
+ * is not the player's: a photograph, the die-cut sticker it becomes by itself, and
+ * — one tap on « Sublimer » — the redraw that CarDex Pro buys. Three bundled
+ * assets, no vision call, no image call, no scan charged; see
+ * `src/data/onboardingDemo.ts`. It sits *before* the photo rather than on the
+ * player's own card at the end, for two reasons. The player has nothing to lose
+ * yet, so a demo here costs them nothing and no allowance is spent; and it is
+ * what turns « montre-la moi » from a request into an offer — they have already
+ * seen what they get back. The paid half being shown on somebody else's car is
+ * the point too: what Pro is sold on later is the difference they watched happen,
+ * not a feature described to them.
+ *
  * There is one way past all of it, on the first step: a player who already has an
  * account jumps straight to the sign-in, because the three questions exist to
  * build a first card for somebody who has none. A reinstall answering them again
@@ -95,7 +108,16 @@ import { colors, fonts, gutter, motion, radii, shadow, spacing, type, withAlpha 
  * the first one looks like.
  */
 
-type Step = 'name' | 'brand' | 'model' | 'photo' | 'auth' | 'working' | 'done';
+type Step = 'name' | 'brand' | 'model' | 'demo' | 'photo' | 'auth' | 'working' | 'done';
+
+/**
+ * Where the demonstration is up to.
+ *
+ * `cut` is the free sticker, which arrives by itself; `redrawn` is the paid one,
+ * which arrives only if the player asks for it. Nothing is generated in either
+ * case — the phase picks which of two bundled pictures the card is showing.
+ */
+type DemoPhase = 'cut' | 'working' | 'redrawn';
 
 interface Line {
   id: string;
@@ -109,6 +131,15 @@ interface Line {
   text?: string;
   /** A photo answer: the player showing their car rather than typing. */
   photo?: string;
+  /**
+   * The demonstration card, rather than a bubble.
+   *
+   * It lives in the transcript instead of in the dock because it is the app
+   * *showing* the player something in the middle of a conversation — and because
+   * the transcript is what scrolls, so the card cannot end up half off screen
+   * above a dock that grew.
+   */
+  demo?: true;
   /** Stagger, so two lines in a row land like someone talking. */
   delay: number;
 }
@@ -121,6 +152,68 @@ const OPENING: Line[] = [
     text: 'Avant de te lâcher dans la rue, trois questions. On commence facile : *c’est quoi ton prénom* ?',
     delay: 460,
   },
+];
+
+/**
+ * The demonstration, in four beats.
+ *
+ * Written on somebody else's car on purpose: the player has answered three
+ * questions and has nothing in their hands yet, so this is the first thing the
+ * app gives rather than asks. `INTRO` replaces the old « Maintenant montre-la
+ * moi » — that request moved to `DEMO_EXIT`, after the player has seen what they
+ * would get back for it.
+ */
+const DEMO_INTRO = 'Avant que tu me montres la tienne, regarde ce que je fais *d’une photo*.';
+
+/** Said once the die-cut has landed, and it is what points at the button. */
+const DEMO_CUT = [
+  'Ça, c’est *gratuit* et automatique, sur chaque voiture que tu scannes.',
+  'Maintenant appuie sur *Sublimer*, et regarde la différence.',
+];
+
+/**
+ * Said once the redraw has landed. It names the price honestly — the paywall
+ * arrives minutes later and a demonstration that hid which half was paid would
+ * make that arrival feel like a bait.
+ */
+const DEMO_REDRAWN = [
+  'Même voiture, même angle, même couleur — juste *redessinée*. C’est ce que fait « Embellir », avec *CarDex Pro*.',
+  'Le sticker découpé, lui, est gratuit et sur *toutes* tes voitures.',
+];
+
+/** The request the demo earned, on the way to the photo step. */
+const DEMO_EXIT =
+  'Allez — *montre-moi la tienne*. Une photo, et je t’en fais un sticker comme celui-là.';
+
+/**
+ * What the card says under the sticker it is showing.
+ *
+ * On the card rather than in a bubble: the bubbles scroll away and this is a
+ * label on an object, not a thing somebody said. It is also the only place the
+ * free/paid split is stated next to the picture it applies to.
+ */
+const DEMO_FREE_CAPTION =
+  'Sticker découpé sur ton téléphone, en une seconde. Gratuit, sur chaque voiture.';
+
+const DEMO_CAPTION: Record<DemoPhase, string> = {
+  cut: DEMO_FREE_CAPTION,
+  // Unchanged while the fake generation runs: the veil is over the picture this
+  // label describes, and swapping it early would announce the redraw before it
+  // exists.
+  working: DEMO_FREE_CAPTION,
+  redrawn: 'Sticker redessiné par l’IA. Réservé à CarDex Pro.',
+};
+
+/**
+ * The fake wait, and it is fake: nothing is being generated. Short enough to
+ * read as a demo rather than as the real thing, which is why the button's own
+ * caption says how long it takes on a real car instead — a demo that pretended
+ * to be instant would set up the thirty seconds as a disappointment.
+ */
+const DEMO_WORKING = [
+  'L’IA relit la photo…',
+  'Elle redessine la carrosserie…',
+  'Vernis, lumière, découpe…',
 ];
 
 /** Said right before the sign-in step, so it is obvious what it buys. */
@@ -241,6 +334,17 @@ export default function Onboarding() {
   const [model, setModel] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
 
+  const [demoPhase, setDemoPhase] = useState<DemoPhase>('cut');
+  /**
+   * Whether the demonstration card is in the transcript yet.
+   *
+   * State rather than a ref, because two effects need it: the one that puts the
+   * card there — where it also makes the insert idempotent, and the card's id is
+   * fixed so a second copy would collide on that key as well as burst twice — and
+   * the one that waits for the sticker to land before saying anything about it.
+   */
+  const [demoShown, setDemoShown] = useState(false);
+
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Provider | 'skip' | null>(null);
   const [entryId, setEntryId] = useState<string | undefined>(undefined);
@@ -311,6 +415,80 @@ export default function Onboarding() {
     setStep(next);
   };
 
+  // ── The demonstration ──────────────────────────────────────────────────────
+
+  /**
+   * Puts the card in the transcript, a beat after the line that announced it.
+   *
+   * Mounted late rather than faded in late, and that distinction is the whole
+   * reason this is a timer instead of an `entering` delay: `StickerReveal` starts
+   * its burst from a mount effect, so a card that exists but is still invisible
+   * would blow the photograph apart behind a fade and hand the player the sticker
+   * with no explosion at all.
+   */
+  useEffect(() => {
+    if (step !== 'demo' || demoShown) return;
+
+    const timer = setTimeout(() => {
+      setDemoShown(true);
+      setLines((previous) => [...previous, { id: 'demo', from: 'app', demo: true, delay: 0 }]);
+    }, DEMO_CARD_IN);
+    return () => clearTimeout(timer);
+  }, [step, demoShown]);
+
+  /**
+   * Talks over each sticker once it has actually landed.
+   *
+   * One rule for both bursts: the card holds its current picture for
+   * `motion.reveal`, flashes, and only then is there anything to comment on. A
+   * line arriving during the hold would be pointing at the picture the burst is
+   * about to destroy.
+   *
+   * Guarded on the step as well as the phase, so a player who walks out of the
+   * demo in the second before these land is not told to press a button that is no
+   * longer on screen.
+   */
+  useEffect(() => {
+    if (step !== 'demo' || !demoShown || demoPhase === 'working') return;
+
+    const timer = setTimeout(
+      () => say(...(demoPhase === 'cut' ? DEMO_CUT : DEMO_REDRAWN)),
+      motion.reveal + motion.flash + motion.base,
+    );
+    return () => clearTimeout(timer);
+  }, [step, demoShown, demoPhase, say]);
+
+  /** The fake generation, which is a timer and nothing else. */
+  useEffect(() => {
+    if (demoPhase !== 'working') return;
+    const timer = setTimeout(() => setDemoPhase('redrawn'), DEMO_WORK_MS);
+    return () => clearTimeout(timer);
+  }, [demoPhase]);
+
+  const sublimate = () => {
+    if (demoPhase !== 'cut') return;
+    setDemoPhase('working');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    // Never a `restyle_*` event: nothing was generated, nothing was billed, and
+    // one demo tap per install landing in `restyle_started` would flatten the
+    // conversion rate of the paid funnel to nothing. See `events`.
+    track(events.onboardingDemoEnhanced, {
+      make: ONBOARDING_DEMO.make,
+      model: ONBOARDING_DEMO.model,
+    });
+  };
+
+  /** Both ways out of the demo end on the same request. */
+  const leaveDemo = () => {
+    say(DEMO_EXIT);
+    advance('photo');
+  };
+
+  const skipDemo = () => {
+    track(events.onboardingDemoSkipped, { phase: demoPhase });
+    leaveDemo();
+  };
+
   // ── The three questions ────────────────────────────────────────────────────
 
   const submitName = () => {
@@ -368,12 +546,11 @@ export default function Onboarding() {
     setModel(chosen);
 
     reply(value);
-    say(
-      carReaction(resolved, value),
-      ...(spec ? [spec] : []),
-      'Maintenant *montre-la moi*. Une photo, et je t’en fais un *sticker de collection*.',
-    );
-    advance('photo');
+    // The request for a photo used to be the third line here. It is `DEMO_EXIT`
+    // now, on the far side of the demonstration: asking after showing what comes
+    // back is a different question from asking before.
+    say(carReaction(resolved, value), ...(spec ? [spec] : []), DEMO_INTRO);
+    advance('demo');
 
     // Fired here rather than at the end: a player who drops out on the photo
     // still told us what they drive, and every unmatched pair is a car our
@@ -766,9 +943,13 @@ export default function Onboarding() {
         onContentSizeChange={() => transcript.current?.scrollToEnd({ animated: true })}
         keyboardShouldPersistTaps="handled"
       >
-        {lines.map((line) => (
-          <Bubble key={line.id} line={line} />
-        ))}
+        {lines.map((line) =>
+          line.demo ? (
+            <DemoCard key={line.id} phase={demoPhase} />
+          ) : (
+            <Bubble key={line.id} line={line} />
+          ),
+        )}
 
         {step === 'working' ? (
           <Working label={returning ? 'Je récupère ton garage…' : 'Je découpe ta voiture…'} />
@@ -834,6 +1015,45 @@ export default function Onboarding() {
               />
             )}
           </View>
+        ) : null}
+
+        {/* Nothing to press until the card is on screen: a « Sublimer » button
+            sitting under a transcript that has not shown the sticker yet is a
+            button for a picture nobody has seen. */}
+        {step === 'demo' && demoShown ? (
+          <Animated.View entering={FadeInDown.duration(motion.base)}>
+            {demoPhase === 'redrawn' ? (
+              <Button label="Montrer ma voiture" size="lg" onPress={leaveDemo} />
+            ) : (
+              <>
+                <Button
+                  label={demoPhase === 'working' ? 'L’IA dessine…' : 'Sublimer ce sticker'}
+                  // The real thing takes half a minute and this demo takes two
+                  // seconds, so the caption is where the honest number goes —
+                  // otherwise the first real « Embellir » reads as a regression.
+                  caption={
+                    demoPhase === 'working'
+                      ? undefined
+                      : 'Une trentaine de secondes sur ta voiture'
+                  }
+                  onPress={sublimate}
+                  loading={demoPhase === 'working'}
+                />
+
+                {/* Only in `cut`: skipping mid-generation would leave the fake
+                    wait running behind a screen the player has left. */}
+                {demoPhase === 'cut' ? (
+                  <Button
+                    label="Passer"
+                    variant="ghost"
+                    size="md"
+                    onPress={skipDemo}
+                    style={styles.skip}
+                  />
+                ) : null}
+              </>
+            )}
+          </Animated.View>
         ) : null}
 
         {step === 'photo' ? (
@@ -962,6 +1182,124 @@ function Bubble({ line }: { line: Line }) {
 }
 
 /**
+ * The demonstration, as a card in the middle of the conversation.
+ *
+ * It is built out of the same pieces as a real one — `StickerReveal`, the rarity
+ * tag, the XP line — because the point is that the player recognises this card
+ * again ten seconds later holding their own. Twice over, so the free half and the
+ * paid half are the same object changing rather than two screens:
+ *
+ * - `cut` blows the *photograph* apart and lands the die-cut. That is the scan,
+ *   compressed: it happens by itself, and it is what every car will look like.
+ * - `redrawn` blows the *die-cut* apart and lands the redraw, which is why
+ *   `beforeFit` exists — a sticker cropped to fill loses the white edge that
+ *   makes it one.
+ *
+ * Nothing here is generated. All three pictures ship in the bundle; see
+ * `src/data/onboardingDemo.ts`.
+ */
+function DemoCard({ phase }: { phase: DemoPhase }) {
+  const accent = rarityColor(ONBOARDING_DEMO.rarity);
+  const redrawn = phase === 'redrawn';
+
+  // Same slow breathing as the scanner and the restyle screen, over the picture
+  // that is about to be replaced.
+  const sweep = useSharedValue(0);
+  useEffect(() => {
+    if (phase !== 'working') return;
+    sweep.value = 0;
+    sweep.value = withRepeat(
+      withTiming(1, { duration: 900, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    );
+  }, [phase, sweep]);
+  const sweepStyle = useAnimatedStyle(() => ({ opacity: 0.2 + sweep.value * 0.4 }));
+
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(motion.base)}
+      style={[styles.demoCard, { borderColor: withAlpha(accent, 0.27) }]}
+    >
+      <View style={styles.demoMedia}>
+        {/* Remounted between the two phases on purpose: `StickerReveal` plays its
+            burst from a mount effect, so the second reveal needs a new instance
+            rather than new props. */}
+        <StickerReveal
+          key={redrawn ? 'redrawn' : 'cut'}
+          before={redrawn ? ONBOARDING_DEMO.diecut : ONBOARDING_DEMO.photo}
+          after={redrawn ? ONBOARDING_DEMO.redraw : ONBOARDING_DEMO.diecut}
+          beforeFit={redrawn ? 'contain' : 'cover'}
+          accent={accent}
+          radius={radii.xl}
+        />
+
+        {phase === 'working' ? (
+          <>
+            <Animated.View style={[styles.demoVeil, sweepStyle]} pointerEvents="none" />
+            <View style={styles.demoWorking} pointerEvents="none">
+              <DemoWorking />
+            </View>
+          </>
+        ) : null}
+
+        {/* Said on the picture, not in a bubble: the bubbles scroll away, and a
+            card the player might mistake for a car they own must carry the word
+            « exemple » for as long as it is on screen. */}
+        <View style={styles.demoPill}>
+          <Text variant="overline" tone="secondary" uppercase>
+            Exemple
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.cardBody}>
+        <Text variant="label" tone="secondary" uppercase>
+          {ONBOARDING_DEMO.make}
+        </Text>
+        <Text variant="title">{ONBOARDING_DEMO.model}</Text>
+        <View style={styles.cardRow}>
+          <RarityTag rarity={ONBOARDING_DEMO.rarity} size="md" />
+          <Text variant="label" tone="tertiary">
+            +{ONBOARDING_DEMO.xp} XP
+          </Text>
+        </View>
+        <Text variant="caption" tone="tertiary" style={styles.demoCaption}>
+          {DEMO_CAPTION[phase]}
+        </Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+/**
+ * The fake work, one line at a time.
+ *
+ * Advances so the last line is still on screen when the burst arrives, and does
+ * not loop: the whole thing lasts `DEMO_WORK_MS`, and a list coming round twice
+ * inside two seconds reads as a stutter.
+ */
+function DemoWorking() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(
+      () => setIndex((current) => Math.min(current + 1, DEMO_WORKING.length - 1)),
+      DEMO_WORK_MS / DEMO_WORKING.length,
+    );
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <Animated.View key={index} entering={FadeIn.duration(motion.fast)}>
+      <Text variant="caption" tone="secondary" center>
+        {DEMO_WORKING[index]}
+      </Text>
+    </Animated.View>
+  );
+}
+
+/**
  * The wait, whatever is being waited on — the image model drawing, or a garage
  * coming back down the wire. Half a minute is long enough that a static line
  * reads as a frozen app, hence the same slow breathing as the scanner.
@@ -1042,6 +1380,17 @@ function Chip({ label, onPress, muted }: { label: string; onPress: () => void; m
     </Pressable>
   );
 }
+
+/**
+ * How long after the line announcing it the demonstration card appears.
+ *
+ * `say()` staggers its lines 320 ms apart from a 220 ms head start, and the line
+ * that introduces the demo is the third of three — so this is that last line,
+ * plus a beat to read it.
+ */
+const DEMO_CARD_IN = 220 + 2 * 320 + 320;
+/** How long the fake generation takes. See `DEMO_WORKING`. */
+const DEMO_WORK_MS = 2400;
 
 const PAYOFF_GLOW = 520;
 const PAYOFF_SILHOUETTE = 180;
@@ -1137,6 +1486,49 @@ const styles = StyleSheet.create({
   },
   skip: {
     marginTop: spacing.xl,
+  },
+
+  // ── The demonstration ─────────────────────────────────────────────────────
+  /**
+   * Full width, unlike a bubble: this is the app putting an object on the table
+   * rather than saying something, and 84% of the transcript would read as a
+   * screenshot somebody pasted into the chat.
+   */
+  demoCard: {
+    alignSelf: 'stretch',
+    marginVertical: spacing.sm,
+    borderRadius: radii.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: colors.surface,
+    // No `overflow: hidden`: the burst inside `StickerReveal` is supposed to
+    // escape the card, and the picture rounds its own top corners.
+  },
+  demoMedia: {
+    width: '100%',
+  },
+  demoVeil: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: colors.bg,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+  },
+  demoWorking: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  demoPill: {
+    position: 'absolute',
+    top: spacing.md,
+    left: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.pill,
+    backgroundColor: withAlpha(colors.bg, 0.82),
+  },
+  demoCaption: {
+    marginTop: spacing.sm,
   },
 
   // ── Payoff ────────────────────────────────────────────────────────────────

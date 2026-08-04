@@ -150,6 +150,29 @@ Things that already bit us on SDK 57 / RN 0.86:
   start, and reporting there would file one failure per launch per car for ever.
   A photo with no subject is also **not** sent to `captureError` — same call as
   `no_car`, that is the player framing badly.
+- **Onboarding demonstrates both stickers before it asks for a photo, and the
+  demonstration is entirely fake.** The `demo` step sits between the third
+  question and the photo, and shows one car that is not the player's going
+  photograph → die-cut → redraw, the last one on a tap on « Sublimer ». Three
+  bundled assets (`assets/onboarding/`, indexed by `src/data/onboardingDemo.ts`):
+  no vision call, no image call, no scan and no `restyle_calls` charged, so it
+  costs nothing and needs no allowance — which is the only reason it can afford to
+  show the paid half at all. Four things hold it:
+  - **It fires `onboarding_demo_enhanced`, never `restyle_started`.** Same reason
+    the die-cut fires nothing: one tap per install landing in the paid funnel
+    would flatten its conversion rate. Nothing was generated and nobody was
+    refused.
+  - **The die-cut asset comes out of `scripts/diecut-asset.swift`**, a deliberate
+    port of the module's `composeSticker`. A demo sticker with a different edge or
+    margin than every real one demonstrates the wrong product; a screenshot off a
+    device is whatever resolution that device had.
+  - **The redraw asset is generated with `buildPrompt('transparent')` verbatim**,
+    on the demo photograph, at the function's own settings. Any other prompt makes
+    the demo promise a rendering the feature does not produce.
+  - **It says which half is paid, on the card.** The welcome paywall arrives
+    minutes later, and a demonstration that hid the price is what turns that
+    arrival into a bait. `DEMO_EXIT` is also where « montre-la moi » now lives —
+    asking for the photo *after* showing what comes back is a different question.
 - **The prompt never names the car**, and that rule got *more* important, not
   less, when the feature became a sticker. Two mistakes shipped in the first
   version and both cost fidelity: `quality: low` strips exactly the details that

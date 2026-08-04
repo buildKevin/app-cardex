@@ -130,6 +130,24 @@ export const events = {
    * every completion rate in the funnel read lower than it is.
    */
   onboardingReturningChosen: 'onboarding_returning_chosen',
+  /**
+   * The demo step, where the player taps « Sublimer » on a car that is not
+   * theirs and watches a bundled sticker get replaced by a prettier bundled
+   * sticker.
+   *
+   * Deliberately **not** a `restyle_*` event, for the same reason the die-cut
+   * fires none: nothing is generated, nothing is billed, and nobody is being
+   * refused. A demo tap landing in `restyle_started` would inflate the paid
+   * funnel by one per install and make its conversion rate meaningless.
+   *
+   * What it does answer is whether the demonstration lands — the tap rate here
+   * against `onboarding_step_viewed { step: 'demo' }`, and then whether the
+   * players who tapped it convert better later. Skipping is worth its own name
+   * for the same reason: a player who walked past the demo has not seen what
+   * « Embellir » sells, and averaging them together hides both.
+   */
+  onboardingDemoEnhanced: 'onboarding_demo_enhanced',
+  onboardingDemoSkipped: 'onboarding_demo_skipped',
   onboardingCompleted: 'onboarding_completed',
   signInStarted: 'sign_in_started',
   signInFailed: 'sign_in_failed',

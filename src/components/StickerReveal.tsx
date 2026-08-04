@@ -1,5 +1,5 @@
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
+import { Image, type ImageProps } from 'expo-image';
 import { useEffect } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
@@ -14,11 +14,29 @@ import Animated, {
 
 import { colors, motion, withAlpha } from '../theme';
 
+/**
+ * A local uri, or a bundled asset.
+ *
+ * Widened from `string | null` for the onboarding demo, which reveals pictures
+ * that ship in the bundle rather than pictures a player took — `require()` hands
+ * back a module id, and resolving it to a uri by hand would mean picking between
+ * a packager URL in dev and a file path in production. `expo-image` already
+ * accepts both shapes, so the type just stops lying about it.
+ */
+type Picture = ImageProps['source'];
+
 interface StickerRevealProps {
   /** The photograph. On screen alone until the sticker lands on top of it. */
-  before: string | null;
+  before: Picture;
   /** The sticker. Null when none was generated — then nothing explodes. */
-  after: string | null;
+  after: Picture;
+  /**
+   * How the *before* picture fills the frame. `cover` for a photograph, which is
+   * every case but one: the onboarding demo blows apart a die-cut to land a
+   * redraw, and a sticker cropped to fill loses the white edge that makes it one.
+   * The *after* picture is always a sticker, so it is always `contain`.
+   */
+  beforeFit?: 'cover' | 'contain';
   /** Rarity colour, so the burst is the colour of what was won. */
   accent: string;
   /** Corner rounding for the picture, matching the card it sits in. */
@@ -42,7 +60,14 @@ interface StickerRevealProps {
  * With no sticker to reveal (a failed or refused generation) it degrades to the
  * photograph, silently: an explosion that ends on the same picture is a bug.
  */
-export function StickerReveal({ before, after, accent, radius, style }: StickerRevealProps) {
+export function StickerReveal({
+  before,
+  after,
+  beforeFit = 'cover',
+  accent,
+  radius,
+  style,
+}: StickerRevealProps) {
   /** 0 → 1 over the burst: shards travel, ring expands, both fade. */
   const burst = useSharedValue(0);
   const flash = useSharedValue(0);
@@ -107,9 +132,9 @@ export function StickerReveal({ before, after, accent, radius, style }: StickerR
         {before ? (
           <Animated.View style={[StyleSheet.absoluteFill, photoStyle]}>
             <Image
-              source={{ uri: before }}
+              source={before}
               style={StyleSheet.absoluteFill}
-              contentFit="cover"
+              contentFit={beforeFit}
               transition={220}
             />
           </Animated.View>
@@ -118,7 +143,7 @@ export function StickerReveal({ before, after, accent, radius, style }: StickerR
         {after ? (
           <Animated.View style={[StyleSheet.absoluteFill, landStyle]}>
             <Image
-              source={{ uri: after }}
+              source={after}
               style={StyleSheet.absoluteFill}
               // Die-cut: cropping it to fill would cut off the edge that makes
               // it a sticker.
