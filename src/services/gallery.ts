@@ -1,6 +1,7 @@
 import { File, Paths } from 'expo-file-system';
 
 import { createId } from '../lib/id';
+import { signPhotoPath } from './sync';
 
 /**
  * Saving a sticker into the system photo library.
@@ -58,14 +59,26 @@ export async function saveToGallery(
   const permission = await media.requestPermissionsAsync(true);
   if (!permission.granted) return 'denied';
 
-  if (uri.startsWith('file:')) {
+  // `exists` and not just the scheme: a local uri whose file is gone (a purge,
+  // a failed copy) can still be re-signed from the remote path below, and
+  // handing the dead uri to the library would only ever throw.
+  if (uri.startsWith('file:') && new File(uri).exists) {
     await media.saveToLibraryAsync(uri);
     return 'saved';
   }
 
+  // A remote uri is a signed URL pulled at restore, and it lives in the store
+  // for as long as the entry does — `mergeRemote` never re-signs it, so by the
+  // time the player taps « Enregistrer » it has usually expired. `expo-image`
+  // keeps showing the picture from its cache, which is what made this fail
+  // invisibly: the sticker on screen looked fine while the URL behind it was
+  // dead. The stored path can always be re-signed; the stored URL cannot be
+  // trusted. Falls back to the stored URL when re-signing fails (offline, or a
+  // key-less build), where it still works for the first day.
+  const fresh = remotePath ? await signPhotoPath(remotePath) : null;
   const extension = remotePath?.endsWith('.png') ? 'png' : 'jpg';
   const temp = await File.downloadFileAsync(
-    uri,
+    fresh ?? uri,
     new File(Paths.cache, `${createId()}.${extension}`),
   );
   try {

@@ -168,6 +168,20 @@ export async function pullGarage(userId: string): Promise<GarageEntry[]> {
   }));
 }
 
+/**
+ * A fresh signed URL for a stored picture, or null when it cannot be signed.
+ *
+ * The URLs `pullGarage` hands back sit in the store for as long as the entry
+ * does, and expire in a day — `mergeRemote` never revisits a known entry, so
+ * nothing re-signs them. Anything that needs the actual bytes later (the
+ * gallery save) must re-sign the path rather than trust the stored URL.
+ */
+export async function signPhotoPath(path: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_TTL);
+  return data?.signedUrl ?? null;
+}
+
 export async function deleteRemoteEntry(remoteId: string): Promise<void> {
   if (!supabase) return;
   await supabase.from('garage').delete().eq('id', remoteId);

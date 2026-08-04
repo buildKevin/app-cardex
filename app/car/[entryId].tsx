@@ -101,15 +101,24 @@ export default function CarDetail() {
     });
   };
 
+  // The button sits on the sticker on screen, so the sticker on screen is what
+  // gets saved — the free die-cut counts, not just the paid redraw. Only the
+  // redraw has a remote path to fall back on; a die-cut is always a local file.
+  const savedKind = hero === entry.styledPhotoUri ? 'redraw' : 'diecut';
+
   const onSaveSticker = async () => {
-    if (stickerSave !== 'idle' || !entry.styledPhotoUri) return;
+    if (stickerSave !== 'idle' || !hero || !isSticker(entry, hero)) return;
     setStickerSave('saving');
 
     try {
-      const result = await saveToGallery(entry.styledPhotoUri, entry.styledPhotoPath);
+      const result = await saveToGallery(
+        hero,
+        savedKind === 'redraw' ? entry.styledPhotoPath : null,
+      );
 
       if (result === 'saved') {
         track(events.stickerSaved, {
+          kind: savedKind,
           rarity: entry.rarity,
           brand_id: entry.brandId,
           in_catalogue: entry.carId !== null,
@@ -120,7 +129,7 @@ export default function CarDetail() {
       }
 
       setStickerSave('idle');
-      track(events.stickerSaveFailed, { reason: result });
+      track(events.stickerSaveFailed, { reason: result, kind: savedKind });
       if (result === 'denied') {
         Alert.alert(
           'Accès refusé',
@@ -133,7 +142,7 @@ export default function CarDetail() {
       setStickerSave('idle');
       // Both, on purpose: the event is what a funnel counts, the exception is
       // what says why.
-      track(events.stickerSaveFailed, { reason: 'error' });
+      track(events.stickerSaveFailed, { reason: 'error', kind: savedKind });
       captureError(error, { stage: 'save_sticker' });
       Alert.alert('Enregistrement impossible', 'Réessaie dans un instant.');
     }
