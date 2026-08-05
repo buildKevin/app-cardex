@@ -1,6 +1,6 @@
 # Conditions d'utilisation — CarDex
 
-*Dernière mise à jour : 3 août 2026*
+*Dernière mise à jour : 5 août 2026*
 
 En installant et en utilisant CarDex, tu acceptes ce qui suit. Si tu n'es pas
 d'accord, n'utilise pas l'application.
