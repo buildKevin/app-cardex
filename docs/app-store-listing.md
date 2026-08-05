@@ -199,12 +199,24 @@ CARDEX PRO
 La version gratuite donne 10 scans, et le sticker découpé sur chaque voiture.
 CarDex Pro lève la limite de scans et débloque « Embellir », 30 par mois.
 
-- Mensuel 4,99 €
-- Annuel 29,99 €
-- À vie 69,99 €, paiement unique
+- Mensuel — 4,99 € par mois, abonnement à renouvellement automatique
+- Annuel — 29,99 € par an, abonnement à renouvellement automatique
+- À vie — 69,99 €, paiement unique, sans renouvellement
 
 Un scan qui échoue, ou une voiture que nous ne savons pas identifier, ne t'est
 jamais compté.
+
+CONDITIONS D'ABONNEMENT
+
+Le paiement est débité sur le compte Apple à la confirmation de l'achat. Un
+abonnement se renouvelle automatiquement, au même tarif, sauf résiliation au
+moins 24 heures avant la fin de la période en cours ; le compte est débité dans
+les 24 heures qui précèdent le renouvellement. La gestion et la résiliation se
+font après l'achat dans les réglages du compte Apple.
+
+Conditions d'utilisation (EULA) : https://www.apple.com/legal/internet-services/itunes/dev/stdeula/
+Conditions d'utilisation CarDex : https://playful-text-ba5.notion.site/Conditions-d-utilisation-CarDex-3b1b30ab77048020aa36c37e0107cf7e
+Politique de confidentialité : https://playful-text-ba5.notion.site/Politique-de-confidentialit-CarDex-3b1b30ab770480a1bd2ccc8be82d98a2
 
 SANS COMPTE SI TU VEUX
 
@@ -219,6 +231,25 @@ L'identification repose sur un modèle d'intelligence artificielle : elle se
 trompe, en particulier sur les générations proches. Les caractéristiques
 affichées sont indicatives et n'ont aucune valeur d'expertise.
 ```
+
+**Le bloc « CONDITIONS D'ABONNEMENT » n'est pas décoratif, et il a coûté un
+rejet.** La 1.0.0 (14) a été refusée le 5 août 2026 sous **3.1.2 Business:
+Payments - Subscriptions**, par un contrôle automatique : *« offers
+auto-renewable subscriptions but does not include a functional link to the Terms
+of Use (EULA) in the app's metadata »*. Les liens dans le paywall ne comptent
+pas — Apple exige que la **description** porte elle-même un lien vers les
+conditions, en plus de l'in-app. Trois choses à savoir :
+
+- **Le lien vers l'EULA standard d'Apple est celui que le contrôle cherche.**
+  Nos CGU sont ajoutées à côté : ce sont des conditions de service, elles ne
+  remplacent pas l'EULA. L'autre voie — coller un EULA personnalisé dans
+  *Informations sur l'app → Contrat de licence* — fait relire le texte entier et
+  ouvre un second motif de rejet, pour un champ que personne n'a demandé.
+- **La durée est écrite à côté du prix.** La même règle exige titre, durée et
+  prix par unité ; « Mensuel 4,99 € » les mélangeait.
+- **C'est une correction de métadonnées, pas de binaire.** Le build 14 est
+  toujours valable : on modifie la description de la version refusée et on
+  soumet à nouveau.
 
 ### Build
 
