@@ -59,11 +59,11 @@ recalculés — une correction ne te retire donc rien.
 
 ## 5. Version gratuite et CarDex Pro
 
-La version gratuite donne **10 scans** et **un restylage de photo**, pour la durée de
-vie du compte.
+La version gratuite donne **10 scans** pour la durée de vie du compte, et le
+**sticker détouré** de chaque voiture — fabriqué sur ton téléphone, sans limite.
 
-CarDex Pro lève la limite de scans et donne **30 restylages par mois**, remis à zéro
-chaque mois. Les tarifs affichés dans l'application au moment de l'achat font foi ;
+CarDex Pro lève la limite de scans et débloque **« Embellir »**, la version
+redessinée du sticker, **30 par mois**, remis à zéro chaque mois. Les tarifs affichés dans l'application au moment de l'achat font foi ;
 à ce jour :
 
 | Formule | Prix |
