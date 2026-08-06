@@ -2,7 +2,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -91,6 +91,10 @@ export default function Scan() {
       granted: answer.granted,
       can_ask_again: answer.canAskAgain,
     });
+  };
+
+  const openSettings = () => {
+    Linking.openSettings().catch(() => {});
   };
 
   const capture = async () => {
@@ -213,13 +217,27 @@ export default function Scan() {
   if (!permission) return <View style={styles.root} />;
 
   if (!permission.granted) {
+    // Once iOS stops offering the prompt, the button below can only lead to
+    // Réglages — a screen still calling itself a permission request would be a
+    // button that does nothing.
+    const blocked = !permission.canAskAgain;
+
     return (
       <View style={[styles.root, styles.permission, { paddingTop: insets.top + spacing.xxxl }]}>
         <Text variant="title">Accès à l'appareil photo</Text>
         <Text variant="body" tone="secondary" style={styles.permissionCopy}>
-          CarDex a besoin de la caméra pour identifier les voitures que tu croises.
+          {blocked
+            ? "L'accès à la caméra est désactivé. Active-le dans Réglages pour identifier les voitures que tu croises."
+            : 'CarDex a besoin de la caméra pour identifier les voitures que tu croises.'}
         </Text>
-        <Button label="Autoriser la caméra" onPress={askPermission} style={styles.permissionCta} />
+        {/* App Review 5.1.1(iv): the screen before the system prompt explains why
+            we ask, and never tells the player how to answer — hence « Continuer »
+            rather than a button that pushes for a yes. */}
+        <Button
+          label={blocked ? 'Ouvrir les Réglages' : 'Continuer'}
+          onPress={blocked ? openSettings : askPermission}
+          style={styles.permissionCta}
+        />
       </View>
     );
   }
