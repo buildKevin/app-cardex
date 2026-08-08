@@ -45,7 +45,6 @@ import {
   SignInCancelled,
   continueWithoutAccount,
   isAppleSignInAvailable,
-  signIn,
   signInWithApple,
   type Account,
   type Provider,
@@ -277,9 +276,9 @@ function plain(value: string): string {
  * would also look like, and the returning player has no other way to tell.
  *
  * Which is also why the empty case is split. A player who told us they already
- * have an account and got nothing back has almost always signed in with the
- * other provider — the garage is on the Apple id and they tapped Google — and
- * that is a fixable mistake if we say so instead of showing them an empty room.
+ * have an account and got nothing back has almost always signed in with a
+ * different Apple id from the one holding the garage — a fixable mistake if we
+ * say so instead of showing them an empty room.
  */
 function emptyPayoffCopy(returning: boolean, restored: number, name: string): string {
   if (restored === 1) {
@@ -1099,19 +1098,11 @@ export default function Onboarding() {
                   onPress={() => run('apple', signInWithApple)}
                 />
               ) : null}
-
-              <Button
-                label="Continuer avec Google"
-                variant={appleAvailable ? 'secondary' : 'primary'}
-                onPress={() => run('google', () => signIn('google'))}
-                loading={pending === 'google'}
-                disabled={pending !== null}
-              />
             </View>
 
-            {/* Set apart, not stacked: it is the way *past* the two accounts,
-                not a third one, and a ghost button sitting in the same rhythm as
-                them reads as an equal option. */}
+            {/* Set apart, not stacked: it is the way *past* the account, not a
+                second one, and a ghost button sitting in the same rhythm as it
+                reads as an equal option. */}
             <Button
               label="Continuer sans compte"
               variant="ghost"
